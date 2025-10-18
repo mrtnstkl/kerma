@@ -1,0 +1,11 @@
+version: '3.3'
+services:
+    typescript:
+        build:
+          dockerfile: Dockerfile
+          context: .
+        restart: always
+        ports:
+            - '18018:18018'
+        container_name: kerma-typescript
+        image: typescript
