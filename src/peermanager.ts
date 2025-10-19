@@ -3,16 +3,17 @@ import { logger } from './logger'
 import isValidHostname from 'is-valid-hostname'
 
 const BOOTSTRAP_PEERS: string[] = [
-  /* TODO */
+  '128.130.122.73:18018'
 ]
 
 class PeerManager {
   knownPeers: Set<string> = new Set()
 
   async load() {
+    this.knownPeers = new Set(BOOTSTRAP_PEERS);
     /* TODO */
   }
-  
+
   async store() {
     /* TODO */
   }

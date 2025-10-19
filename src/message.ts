@@ -1,7 +1,9 @@
-import { Literal,
-         Record, Array, Union,
-         String, Number,
-         Static, Null, Unknown, Optional } from 'runtypes'
+import {
+  Literal,
+  Record, Array, Union,
+  String, Number,
+  Static, Null, Unknown, Optional
+} from 'runtypes'
 
 /**
  * This file defines all Objects and Message Types that can be conveniently be used later
@@ -59,37 +61,90 @@ export const BlockObject = Record({
 export type BlockObjectType = Static<typeof BlockObject>
 
 
-export const HelloMessage = String
-export type HelloMessageType = String
-export const GetPeersMessage = String
-export type GetPeersMessageType = String
-export const PeersMessage = String
-export type PeersMessageType = String
-export const GetObjectMessage = String
-export type GetObjectMessageType = String
-export const IHaveObjectMessage = String
-export type IHaveObjectMessageType = String
+// Helper types
+const Version = String.withConstraint((value) => /^0\.10\.[0-9]$/.test(value));
+const Agent = String.withConstraint((value) => {
+  if (value.length > 128) return false;
+
+  // Check all characters are ASCII-printable
+  return /^[\x20-\x7E]*$/.test(value);
+})
+
+// Message types
+
+export const HelloMessage = Record({
+  type: Literal('hello'),
+  version: Version,
+  agent: Agent
+})
+export type HelloMessageType = Static<typeof HelloMessage>
+
+export const GetPeersMessage = Record({
+  type: Literal('getpeers')
+  /* TODO: finish this type */
+})
+export type GetPeersMessageType = Static<typeof GetPeersMessage>
+
+export const PeersMessage = Record({
+  type: Literal('peers')
+  /* TODO: finish this type */
+})
+export type PeersMessageType = Static<typeof PeersMessage>
+
+export const GetObjectMessage = Record({
+  type: Literal('getobject')
+  /* TODO: finish this type */
+})
+export type GetObjectMessageType = Static<typeof GetObjectMessage>
+
+export const IHaveObjectMessage = Record({
+  type: Literal('ihaveobject')
+  /* TODO: finish this type */
+})
+export type IHaveObjectMessageType = Static<typeof IHaveObjectMessage>
 
 export const Object = String
 export type ObjectType = String
 
-export const ObjectMessage = String
-export type ObjectMessageType = String
+export const ObjectMessage = Record({
+  type: Literal('object')
+  /* TODO: finish this type */
+})
+export type ObjectMessageType = Static<typeof ObjectMessage>
 
-export const GetChainTipMessage = String
-export type GetChainTipMessageType = String
+export const GetChainTipMessage = Record({
+  type: Literal('getchaintip')
+  /* TODO: finish this type */
+})
+export type GetChainTipMessageType = Static<typeof GetChainTipMessage>
 
-export const ChainTipMessage = String
-export type ChainTipMessageType = String
+export const ChainTipMessage = Record({
+  type: Literal('chaintip')
+  /* TODO: finish this type */
+})
+export type ChainTipMessageType = Static<typeof ChainTipMessage>
 
-export const GetMempoolMessage = String
-export type GetMempoolMessageType = String
+export const GetMempoolMessage = Record({
+  type: Literal('getmempool')
+  /* TODO: finish this type */
+})
+export type GetMempoolMessageType = Static<typeof GetMempoolMessage>
 
-export const MempoolMessage = String
-export type MempoolMessageType = String
+export const MempoolMessage = Record({
+  type: Literal('mempool')
+  /* TODO: finish this type */
+})
+export type MempoolMessageType = Static<typeof MempoolMessage>
 
-export const ErrorMessage = String
-export type ErrorMessageType = String
+export const ErrorCode = Union(Literal('INVALID_FORMAT'), Literal('INVALID_HANDSHAKE')) // TODO: Add rest of the error codes
+export type ErrorCodeType = Static<typeof ErrorCode>
+
+export const ErrorMessage = Record({
+  type: Literal('error'),
+  name: ErrorCode,
+  msg: String
+})
+export type ErrorMessageType = Static<typeof ErrorMessage>
 
 export const Messages = [
   HelloMessage,
