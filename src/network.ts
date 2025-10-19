@@ -80,6 +80,11 @@ export class MessageSocket extends EventEmitter {
   }
 
   sendMessage(message: string, callback?: (err?: Error) => void) {
+    if (this.netSocket.destroyed || this.netSocket.writableEnded) {
+      logger.warn(`Tried to write after socket closed`);
+      return;
+    }
+
     this.netSocket.write(message + '\n', callback)
   }
 
