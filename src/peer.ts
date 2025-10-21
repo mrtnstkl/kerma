@@ -1,21 +1,23 @@
 import { logger } from './logger'
 import { MessageSocket } from './network'
-import { Messages,
-         Message,
-         HelloMessage,
-         PeersMessage, GetPeersMessage,
-         IHaveObjectMessage, GetObjectMessage, ObjectMessage,
-         GetChainTipMessage, ChainTipMessage,
-         ErrorMessage,
-         MessageType,
-         HelloMessageType,
-         PeersMessageType, GetPeersMessageType,
-         IHaveObjectMessageType, GetObjectMessageType, ObjectMessageType,
-         GetChainTipMessageType, ChainTipMessageType,
-         ErrorMessageType,
-         GetMempoolMessageType,
-         MempoolMessageType
-        } from './message'
+import {
+  Messages,
+  Message,
+  HelloMessage,
+  PeersMessage, GetPeersMessage,
+  IHaveObjectMessage, GetObjectMessage, ObjectMessage,
+  GetChainTipMessage, ChainTipMessage,
+  ErrorMessage,
+  MessageType,
+  HelloMessageType,
+  PeersMessageType, GetPeersMessageType,
+  IHaveObjectMessageType, GetObjectMessageType, ObjectMessageType,
+  GetChainTipMessageType, ChainTipMessageType,
+  ErrorMessageType,
+  GetMempoolMessageType,
+  MempoolMessageType,
+  ErrorCodeType
+} from './message'
 import { peerManager } from './peermanager'
 import { db, objectManager } from './object'
 import { network } from './network'
@@ -23,8 +25,10 @@ import { ObjectId } from './object'
 import { chainManager } from './chain'
 import { mempool } from './mempool'
 
-const VERSION = 'x.y.z' /* TODO */
-const NAME = 'name' /* TODO */
+const VERSION = '0.10.0'
+const NAME = 'b0b3r'
+
+const HANDSHAKE_WAIT_TIME = 20000
 
 // Number of peers that each peer is allowed to report to us
 const MAX_PEERS_PER_PEER = 30
@@ -32,10 +36,17 @@ const MAX_PEERS_PER_PEER = 30
 export class Peer {
   socket: MessageSocket
   peerAddr: string
+  handshakeCompleted = false
   /* TODO */
 
   async sendHello() {
-    /* TODO */
+    const hello: HelloMessageType = {
+      type: 'hello',
+      version: VERSION,
+      agent: NAME,
+    }
+
+    this.sendMessage(hello)
   }
   async sendGetPeers() {
     /* TODO */
@@ -64,34 +75,73 @@ export class Peer {
   async sendMempool(txids: ObjectId[]) {
     /* TODO */
   }
-  async sendError(err: string) {
-    /* TODO */
+  async sendError(errorCode: ErrorCodeType, errorMessage: string) {
+    const error: ErrorMessageType = {
+      type: 'error',
+      name: errorCode,
+      msg: errorMessage
+    }
+
+    this.sendMessage(error)
   }
-  sendMessage(obj: object) {
-    /* TODO */
+  sendMessage(obj: MessageType, callback?: (err?: Error) => void) {
+    const message = JSON.stringify(obj)
+    this.socket.sendMessage(message, callback)
   }
-  async fatalError(err: string) {
-    /* TODO */
+  async fatalError(errorCode: ErrorCodeType, errorMessage: string) {
+    const error: ErrorMessageType = {
+      type: 'error',
+      name: errorCode,
+      msg: errorMessage
+    }
+
+    this.sendMessage(error, () => {
+      this.fail()
+    })
   }
   async fail() {
     /* TODO */
+    this.socket.end()
   }
   async onConnect() {
-    /* TODO */
+    this.info(`onConnect called`)
+    this.sendHello()
+
+    setTimeout(() => {
+      if (!this.handshakeCompleted) {
+        this.fatalError('INVALID_HANDSHAKE', 'Did not receive a handshake 20 seconds after establishing a connection')
+      }
+    }, HANDSHAKE_WAIT_TIME)
   }
   async onMessage(message: string) {
     this.debug(`Message arrival: ${message}`)
 
-    let msg: object = {}
+    let msg: object
 
-    /* TODO */
+    try {
+      msg = JSON.parse(message)
+    } catch {
+      this.log('error', 'Invalid JSON format')
+      return this.fatalError('INVALID_FORMAT', 'Could not parse message json.')
+      // TODO: Not sure if it should be fatal, consult with the professor
+    }
+
+    if (!this.handshakeCompleted) {
+      if (!HelloMessage.guard(msg)) {
+        this.log('error', 'Invalid message, expected handshake message')
+        return this.fatalError('INVALID_HANDSHAKE', 'Did not receive a hello message as the first message.')
+      }
+
+      return this.onMessageHello(msg)
+    }
 
     // check if this msg is a valid Message
-    if (!Message.guard(msg)){
-      /* TODO */
+    if (!Message.guard(msg)) {
+      // TODO: Throw INVALID_FORMAT message
+      return this.fatalError('INVALID_FORMAT', 'The JSON did not match any message format.')
     }
-    /* TODO */
-    /*Message.match(
+
+    Message.match(
       this.onMessageHello.bind(this),
       this.onMessageGetPeers.bind(this),
       this.onMessagePeers.bind(this),
@@ -103,11 +153,17 @@ export class Peer {
       this.onMessageGetMempool.bind(this),
       this.onMessageMempool.bind(this),
       this.onMessageError.bind(this)
-    )(msg)*/
+    )(msg)
   }
 
   async onMessageHello(msg: HelloMessageType) {
-    /* TODO */
+    if (this.handshakeCompleted) {
+      this.warn('Subsequent hello message received')
+      return this.fatalError('INVALID_HANDSHAKE', 'Received a subsequent handshake message')
+    }
+
+    this.info('Hello message received')
+    this.handshakeCompleted = true
   }
   async onMessagePeers(msg: PeersMessageType) {
     /* TODO */
@@ -142,7 +198,7 @@ export class Peer {
   log(level: string, message: string, ...args: any[]) {
     logger.log(
       level,
-      `Add further debug info ${message}`,
+      `[Peer ${this.peerAddr}]: ${message}`,
       ...args
     )
   }
