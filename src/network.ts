@@ -29,8 +29,7 @@ class Network {
       // As there will be no connect event sent by the socket, notify the peer about the connection here.
       peer.onConnect()
 
-      /* TODO */
-      // add peer to known peers
+      peerManager.peerDiscovered(socket.remoteAddress)
     })
 
     logger.info(`Listening for connections on port ${bindPort} and IP ${bindIP}`)

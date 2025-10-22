@@ -101,6 +101,7 @@ export class Peer {
   }
   async fail() {
     /* TODO */
+    this.info(`closing connection`)
     this.socket.end()
   }
   async onConnect() {
