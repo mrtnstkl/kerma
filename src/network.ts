@@ -13,15 +13,16 @@ class Network {
     await peerManager.load()
 
     const server = net.createServer(socket => {
-      logger.info(`New connection from peer ${socket.remoteAddress}`)
+      const remoteAddrWithPort = `${socket.remoteAddress}:${socket.remotePort}`
+      logger.info(`New connection from peer ${remoteAddrWithPort}`)
 
       if (socket.remoteAddress === undefined) {
         logger.error(`Connected peer doesn't have a remote address`)
         return
       }
 
-      const client = new MessageSocket(socket, socket.remoteAddress)
-      const peer = new Peer(client, socket.remoteAddress)
+      const client = new MessageSocket(socket, remoteAddrWithPort)
+      const peer = new Peer(client, remoteAddrWithPort)
 
       // TODO: Handle what to do, when an already connected peer wants to make another connection (if that's possible)
       this.peers.add(peer)
@@ -29,7 +30,7 @@ class Network {
       // As there will be no connect event sent by the socket, notify the peer about the connection here.
       peer.onConnect()
 
-      peerManager.peerDiscovered(socket.remoteAddress)
+      peerManager.peerDiscovered(remoteAddrWithPort)
     })
 
     logger.info(`Listening for connections on port ${bindPort} and IP ${bindIP}`)
@@ -88,7 +89,7 @@ export class MessageSocket extends EventEmitter {
   }
 
   end() {
-    this.netSocket.end()
+    this.netSocket.destroy();
     // TODO: Should anything else happen here?
   }
 }
