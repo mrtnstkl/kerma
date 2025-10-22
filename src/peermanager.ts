@@ -41,8 +41,24 @@ class PeerManager {
     logger.info(`Stored %d known peers to database`, this.knownPeers.size)
   }
 
+  validateAddress(addr: string): boolean {
+    const parts = addr.split(':')
+    if (parts.length != 2) {
+      return false
+    }
+    const [host, portStr] = parts
+    const port = Number(portStr)
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      return false
+    }
+    return isValidHostname(host)
+  }
+
   peerDiscovered(peerAddr: string) {
-    // todo: validate address
+    if (!this.validateAddress(peerAddr)) {
+      logger.warn(`Discovered peer with invalid address: ${peerAddr}`)
+      return
+    }
     if (!this.knownPeers.has(peerAddr)) {
       logger.info(`Discovered new peer: ${peerAddr}`)
       this.knownPeers.add(peerAddr)
