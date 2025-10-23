@@ -101,6 +101,8 @@ export class Peer {
   }
   async fail() {
     /* TODO */
+    peerManager.peerFailed(this.peerAddr)
+    this.info(`closing connection`)
     this.socket.end()
   }
   async onConnect() {
