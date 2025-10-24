@@ -81,13 +81,12 @@ export type HelloMessageType = Static<typeof HelloMessage>
 
 export const GetPeersMessage = Record({
   type: Literal('getpeers')
-  /* TODO: finish this type */
 })
 export type GetPeersMessageType = Static<typeof GetPeersMessage>
 
 export const PeersMessage = Record({
-  type: Literal('peers')
-  /* TODO: finish this type */
+  type: Literal('peers'),
+  peers: Array(String)
 })
 export type PeersMessageType = Static<typeof PeersMessage>
 

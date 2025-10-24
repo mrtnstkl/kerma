@@ -49,10 +49,19 @@ export class Peer {
     this.sendMessage(hello)
   }
   async sendGetPeers() {
-    /* TODO */
+    const getPeersRequest: GetPeersMessageType = {
+        type: 'getpeers'
+    };
+
+    this.sendMessage(getPeersRequest);
   }
   async sendPeers() {
-    /* TODO */
+    const sendPeersMessage: PeersMessageType = {
+        type: 'peers',
+        peers: [...peerManager.knownPeers].slice(0, MAX_PEERS_PER_PEER)
+    }
+
+    this.sendMessage(sendPeersMessage);
   }
   async sendIHaveObject(obj: any) {
     /* TODO */
