@@ -27,6 +27,7 @@ import { mempool } from './mempool'
 
 const VERSION = '0.10.0'
 const NAME = 'b0b3r'
+const HOST_ADDRESS = 'kerma.gnorts.xyz:18018'
 
 const HANDSHAKE_WAIT_TIME = 20000
 
@@ -58,7 +59,7 @@ export class Peer {
   async sendPeers() {
     const sendPeersMessage: PeersMessageType = {
         type: 'peers',
-        peers: [...peerManager.knownPeers].slice(0, MAX_PEERS_PER_PEER)
+        peers: [HOST_ADDRESS,...[...peerManager.knownPeers].slice(0, MAX_PEERS_PER_PEER)]
     }
 
     this.sendMessage(sendPeersMessage);

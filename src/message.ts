@@ -80,6 +80,7 @@ export const HelloMessage = Record({
 export type HelloMessageType = Static<typeof HelloMessage>
 
 export const GetPeersMessage = Record({
+
   type: Literal('getpeers')
 })
 export type GetPeersMessageType = Static<typeof GetPeersMessage>
