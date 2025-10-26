@@ -247,7 +247,7 @@ export class Peer {
     /* TODO */
   }
   // Validate if an object contains additional fields, not defined in its
-  // runtypes type. This has to be performed, as runtypes in its 0.6 version
+  // runtypes type. This has to be performed, as runtypes in its 6.x version
   // doesn't support strict checking. All other schema verification is handled
   // with the the runtypes' types.
   //
