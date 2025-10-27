@@ -29,6 +29,7 @@ import { mempool } from './mempool'
 
 const VERSION = '0.10.0'
 const NAME = 'b0b3r'
+const HOST_ADDRESS = 'kerma.gnorts.xyz:18018'
 
 const HANDSHAKE_WAIT_TIME = 20000
 
@@ -55,10 +56,19 @@ export class Peer {
     this.sendMessage(hello)
   }
   async sendGetPeers() {
-    /* TODO */
+    const getPeersRequest: GetPeersMessageType = {
+        type: 'getpeers'
+    };
+
+    this.sendMessage(getPeersRequest);
   }
   async sendPeers() {
-    /* TODO */
+    const sendPeersMessage: PeersMessageType = {
+        type: 'peers',
+        peers: [HOST_ADDRESS,...[...peerManager.knownPeers].slice(0, MAX_PEERS_PER_PEER)]
+    }
+
+    this.sendMessage(sendPeersMessage);
   }
   async sendIHaveObject(obj: any) {
     /* TODO */
@@ -185,16 +195,29 @@ export class Peer {
     this.handshakeCompleted = true
   }
   async onMessagePeers(msg: PeersMessageType) {
-    if (this.hasExtraFields(msg, PeersMessage.fields)) {
-      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
-    }
-    /* TODO */
+      if (this.hasExtraFields(msg, PeersMessage.fields)) {
+          return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+      }
+
+      if(msg.peers.length > 30)
+          return await this.fatalError('INVALID_FORMAT', `Send too many peers`)
+
+      for (const peer of msg.peers) {
+          if (!peerManager.validateAddress(peer)) {
+              return await this.fatalError('INVALID_FORMAT', `Invalid peer ${peer}`)
+          } else {
+              this.info(`Peer known: ${peer}`)
+              peerManager.peerDiscovered(peer)
+          }
+      }
   }
   async onMessageGetPeers(msg: GetPeersMessageType) {
-    if (this.hasExtraFields(msg, GetPeersMessage.fields)) {
-      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
-    }
-    /* TODO */
+      if (this.hasExtraFields(msg, GetPeersMessage.fields)) {
+          return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+      }
+
+      this.info(`Requesting Peers message received`)
+      await this.sendPeers()
   }
   async onMessageIHaveObject(msg: IHaveObjectMessageType) {
     if (this.hasExtraFields(msg, IHaveObjectMessage.fields)) {
