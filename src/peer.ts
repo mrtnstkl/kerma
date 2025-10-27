@@ -195,6 +195,10 @@ export class Peer {
     this.handshakeCompleted = true
   }
   async onMessagePeers(msg: PeersMessageType) {
+      if (this.hasExtraFields(msg, PeersMessage.fields)) {
+          return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+      }
+
       if(msg.peers.length > 30)
           return await this.fatalError('INVALID_FORMAT', `Send too many peers`)
 
@@ -206,16 +210,14 @@ export class Peer {
               peerManager.peerDiscovered(peer)
           }
       }
-    if (this.hasExtraFields(msg, PeersMessage.fields)) {
-      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
-    }
   }
   async onMessageGetPeers(msg: GetPeersMessageType) {
+      if (this.hasExtraFields(msg, GetPeersMessage.fields)) {
+          return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+      }
+
       this.info(`Requesting Peers message received`)
       await this.sendPeers()
-    if (this.hasExtraFields(msg, GetPeersMessage.fields)) {
-      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
-    }
   }
   async onMessageIHaveObject(msg: IHaveObjectMessageType) {
     if (this.hasExtraFields(msg, IHaveObjectMessage.fields)) {
