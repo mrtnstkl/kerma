@@ -33,7 +33,7 @@ const NAME = 'b0b3r'
 const HANDSHAKE_WAIT_TIME = 20000
 
 const ERROR_MESSAGES = {
-  ILLEGAL_FIELDS: 'Message contains illegal fields.'
+  ILLEGAL_FIELDS: 'Message contains illegal fields.',
 }
 
 // Number of peers that each peer is allowed to report to us
@@ -134,7 +134,6 @@ export class Peer {
       // If the node did not perform a handshake yet, invalid messages from it should be treated
       // as invalid handshake attempts.
       if (this.handshakeCompleted) {
-        // TODO: Not sure if it should be fatal, consult with the professor
         return this.fatalError('INVALID_FORMAT', 'Could not parse message json.')
       } else {
         return this.fatalError('INVALID_HANDSHAKE', 'Received invalid message before handshake.')
@@ -142,17 +141,15 @@ export class Peer {
     }
 
     if (!this.handshakeCompleted) {
-      if (!HelloMessage.guard(msg) || this.hasExtraFields(msg, HelloMessage.fields)) {
+      if (!HelloMessage.guard(msg)) {
         this.log('error', 'Invalid message, expected handshake message')
         return this.fatalError('INVALID_HANDSHAKE', 'Did not receive a hello message as the first message.')
       }
-
       return this.onMessageHello(msg)
     }
 
     // check if this msg is a valid Message
     if (!Message.guard(msg)) {
-      // TODO: Throw INVALID_FORMAT message
       return this.fatalError('INVALID_FORMAT', 'The JSON did not match any message format.')
     }
 
@@ -175,7 +172,8 @@ export class Peer {
     // This assumes higher precence of this error over the subsequent handshake error.
     // Invalid message => Is not a valid subsequent hello message
     if (this.hasExtraFields(msg, HelloMessage.fields)) {
-      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+      const errorCode: ErrorCodeType = this.handshakeCompleted ? 'INVALID_FORMAT' : 'INVALID_HANDSHAKE'
+      return this.fatalError(errorCode, ERROR_MESSAGES.ILLEGAL_FIELDS)
     }
 
     if (this.handshakeCompleted) {
