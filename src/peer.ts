@@ -16,7 +16,9 @@ import {
   ErrorMessageType,
   GetMempoolMessageType,
   MempoolMessageType,
-  ErrorCodeType
+  ErrorCodeType,
+  GetMempoolMessage,
+  MempoolMessage
 } from './message'
 import { peerManager } from './peermanager'
 import { db, objectManager } from './object'
@@ -30,6 +32,10 @@ const NAME = 'b0b3r'
 const HOST_ADDRESS = 'kerma.gnorts.xyz:18018'
 
 const HANDSHAKE_WAIT_TIME = 20000
+
+const ERROR_MESSAGES = {
+  ILLEGAL_FIELDS: 'Message contains illegal fields.',
+}
 
 // Number of peers that each peer is allowed to report to us
 const MAX_PEERS_PER_PEER = 30
@@ -134,8 +140,14 @@ export class Peer {
       msg = JSON.parse(message)
     } catch {
       this.log('error', 'Invalid JSON format')
-      return this.fatalError('INVALID_FORMAT', 'Could not parse message json.')
-      // TODO: Not sure if it should be fatal, consult with the professor
+
+      // If the node did not perform a handshake yet, invalid messages from it should be treated
+      // as invalid handshake attempts.
+      if (this.handshakeCompleted) {
+        return this.fatalError('INVALID_FORMAT', 'Could not parse message json.')
+      } else {
+        return this.fatalError('INVALID_HANDSHAKE', 'Received invalid message before handshake.')
+      }
     }
 
     if (!this.handshakeCompleted) {
@@ -143,13 +155,11 @@ export class Peer {
         this.log('error', 'Invalid message, expected handshake message')
         return this.fatalError('INVALID_HANDSHAKE', 'Did not receive a hello message as the first message.')
       }
-
       return this.onMessageHello(msg)
     }
 
     // check if this msg is a valid Message
     if (!Message.guard(msg)) {
-      // TODO: Throw INVALID_FORMAT message
       return this.fatalError('INVALID_FORMAT', 'The JSON did not match any message format.')
     }
 
@@ -169,6 +179,13 @@ export class Peer {
   }
 
   async onMessageHello(msg: HelloMessageType) {
+    // This assumes higher precence of this error over the subsequent handshake error.
+    // Invalid message => Is not a valid subsequent hello message
+    if (this.hasExtraFields(msg, HelloMessage.fields)) {
+      const errorCode: ErrorCodeType = this.handshakeCompleted ? 'INVALID_FORMAT' : 'INVALID_HANDSHAKE'
+      return this.fatalError(errorCode, ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
+
     if (this.handshakeCompleted) {
       this.warn('Subsequent hello message received')
       return this.fatalError('INVALID_HANDSHAKE', 'Received a subsequent handshake message')
@@ -189,34 +206,75 @@ export class Peer {
               peerManager.peerDiscovered(peer)
           }
       }
+    if (this.hasExtraFields(msg, PeersMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
   }
   async onMessageGetPeers(msg: GetPeersMessageType) {
       this.info(`Requesting Peers message received`)
       await this.sendPeers()
+    if (this.hasExtraFields(msg, GetPeersMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
   }
   async onMessageIHaveObject(msg: IHaveObjectMessageType) {
+    if (this.hasExtraFields(msg, IHaveObjectMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
     /* TODO */
   }
   async onMessageGetObject(msg: GetObjectMessageType) {
+    if (this.hasExtraFields(msg, GetObjectMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
     /* TODO */
   }
   async onMessageObject(msg: ObjectMessageType) {
+    if (this.hasExtraFields(msg, ObjectMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
     /* TODO */
   }
   async onMessageGetChainTip(msg: GetChainTipMessageType) {
+    if (this.hasExtraFields(msg, GetChainTipMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
     /* TODO */
   }
   async onMessageChainTip(msg: ChainTipMessageType) {
+    if (this.hasExtraFields(msg, ChainTipMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
     /* TODO */
   }
   async onMessageGetMempool(msg: GetMempoolMessageType) {
+    if (this.hasExtraFields(msg, GetMempoolMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
     /* TODO */
   }
   async onMessageMempool(msg: MempoolMessageType) {
+    if (this.hasExtraFields(msg, MempoolMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
     /* TODO */
   }
   async onMessageError(msg: ErrorMessageType) {
+    if (this.hasExtraFields(msg, ErrorMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
     /* TODO */
+  }
+  // Validate if an object contains additional fields, not defined in its
+  // runtypes type. This has to be performed, as runtypes in its 6.x version
+  // doesn't support strict checking. All other schema verification is handled
+  // with the the runtypes' types.
+  //
+  // IMPORTANT:
+  // - THIS ASSUMES CORRECTNESS CHECK WAS ALREADY PERFORMED (object contains all required fields)
+  // - THIS ASSUMES NO OPTIONAL FIELDS
+  hasExtraFields(msg: Object, template: Object) {
+    return Object.keys(msg).length !== Object.keys(template).length
   }
   log(level: string, message: string, ...args: any[]) {
     logger.log(
