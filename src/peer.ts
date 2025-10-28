@@ -193,6 +193,9 @@ export class Peer {
 
     this.info('Hello message received')
     this.handshakeCompleted = true
+
+    //immediately request for known peers
+    await this.sendGetPeers();
   }
   async onMessagePeers(msg: PeersMessageType) {
       if (this.hasExtraFields(msg, PeersMessage.fields)) {
