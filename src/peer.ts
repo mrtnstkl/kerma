@@ -65,7 +65,7 @@ export class Peer {
   async sendPeers() {
     const sendPeersMessage: PeersMessageType = {
         type: 'peers',
-        peers: [HOST_ADDRESS,...[...peerManager.knownPeers].slice(0, MAX_PEERS_PER_PEER)]
+        peers: [HOST_ADDRESS,...[...peerManager.knownPeers].slice(0, MAX_PEERS_PER_PEER-1)]
     }
 
     this.sendMessage(sendPeersMessage);
@@ -124,6 +124,8 @@ export class Peer {
   async onConnect() {
     this.info(`onConnect called`)
     this.sendHello()
+    //immediately request for known peers
+    this.sendGetPeers();
 
     setTimeout(() => {
       if (!this.handshakeCompleted) {
