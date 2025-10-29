@@ -124,6 +124,8 @@ export class Peer {
   async onConnect() {
     this.info(`onConnect called`)
     this.sendHello()
+    //immediately request for known peers
+    this.sendGetPeers();
 
     setTimeout(() => {
       if (!this.handshakeCompleted) {
@@ -193,9 +195,6 @@ export class Peer {
 
     this.info('Hello message received')
     this.handshakeCompleted = true
-
-    //immediately request for known peers
-    await this.sendGetPeers();
   }
   async onMessagePeers(msg: PeersMessageType) {
       if (this.hasExtraFields(msg, PeersMessage.fields)) {
