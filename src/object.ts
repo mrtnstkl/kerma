@@ -20,8 +20,48 @@ const OBJECT_AVAILABILITY_TIMEOUT = 5000 // ms
 class ObjectManager {
   /* TODO */
 
+  /**
+   * Converts an object to its canonical string representation
+   * @param obj 
+   * @returns 
+   */
+  toCanonicalString(obj: any): string {
+    if (Array.isArray(obj)) {
+      const arrStr = obj.map((item) => {
+        if (typeof item === 'object' && item !== null) {
+          return this.toCanonicalString(item)
+        } else {
+          return JSON.stringify(item)
+        }
+      })
+      return '[' + arrStr.join(',') + ']'
+    } else if (typeof obj === 'object' && obj !== null) {
+      let str = '{'
+      const keys = globalThis.Object.keys(obj).sort()
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i]
+        str += JSON.stringify(key) + ':'
+        const value = obj[key]
+        if (typeof value === 'object' && value !== null) {
+          str += this.toCanonicalString(value)
+        } else {
+          str += JSON.stringify(value)
+        }
+        if (i < keys.length - 1) {
+          str += ','
+        }
+      }
+      str += '}'
+      return str
+    } else {
+      // Handle primitives
+      return JSON.stringify(obj)
+    }
+  }
+
   id(obj: any) {
-    /* TODO */
+    const serialized = this.toCanonicalString(obj)
+    return hash(serialized)
   }
 
   /**
@@ -29,19 +69,21 @@ class ObjectManager {
    * @param objectid 
    */
   async exists(objectid: ObjectId) {
-    /* TODO */
+    return await db.exists('object:' + objectid)
   }
 
   async get(objectid: ObjectId) {
-    /* TODO */
+    return await db.get('object:' + objectid)
   }
 
   async del(objectid: ObjectId) {
-    /* TODO */
+    return await db.del('object:' + objectid)
   }
 
   async put(object: any) {
-    /* TODO */
+    const objectid = this.id(object)
+    await db.put('object:' + objectid, object)
+    return objectid
   }
 
   async validate(object: ObjectType, peer: Peer) {
