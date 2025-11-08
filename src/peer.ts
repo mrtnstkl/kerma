@@ -71,13 +71,25 @@ export class Peer {
     this.sendMessage(sendPeersMessage);
   }
   async sendIHaveObject(obj: any) {
-    /* TODO */
+    const ihaveobject: IHaveObjectMessageType = {
+      type: 'ihaveobject',
+      objectid: objectManager.id(obj)
+    }
+    this.sendMessage(ihaveobject)
   }
   async sendObject(obj: any) {
-    /* TODO */
+    const objectMessage: ObjectMessageType = {
+      type: 'object',
+      object: obj
+    }
+    this.sendMessage(objectMessage)
   }
   async sendGetObject(objid: ObjectId) {
-    /* TODO */
+    const getobject: GetObjectMessageType = {
+      type: 'getobject',
+      objectid: objid
+    }
+    this.sendMessage(getobject)
   }
   async sendGetChainTip() {
     /* TODO */
@@ -225,19 +237,42 @@ export class Peer {
     if (this.hasExtraFields(msg, IHaveObjectMessage.fields)) {
       return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
     }
-    /* TODO */
+    // check if we have the object
+    if (!await objectManager.exists(msg.objectid)) {
+        // we dont, so request it
+        this.info(`Requesting object ${msg.objectid} from peer`)
+        await this.sendGetObject(msg.objectid)
+    }
   }
   async onMessageGetObject(msg: GetObjectMessageType) {
     if (this.hasExtraFields(msg, GetObjectMessage.fields)) {
       return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
     }
-    /* TODO */
+    // check if we have the object
+    if (await objectManager.exists(msg.objectid)) {
+        // we do, so send it
+        const object = await objectManager.get(msg.objectid)
+        this.info(`Sending object ${msg.objectid} to peer`)
+        await this.sendObject(object)
+    } else {
+        // we dont, so send error
+        this.debug(`Requested object ${msg.objectid} not found locally`)
+        return this.sendError('UNKNOWN_OBJECT', `Object ${msg.objectid} not known`)
+    }
   }
   async onMessageObject(msg: ObjectMessageType) {
     if (this.hasExtraFields(msg, ObjectMessage.fields)) {
       return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
     }
-    /* TODO */
+    // check if we have the object
+    if (!await objectManager.exists(objectManager.id(msg.object))) {
+        // we dont, so store it
+        this.info(`Received new object from peer`)
+        await objectManager.put(msg.object)
+    } else {
+        // todo: do we react to already known objects?
+        this.debug(`Received object is already known`)
+    }
   }
   async onMessageGetChainTip(msg: GetChainTipMessageType) {
     if (this.hasExtraFields(msg, GetChainTipMessage.fields)) {
