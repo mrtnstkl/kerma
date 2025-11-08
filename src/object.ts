@@ -1,8 +1,12 @@
 export type ObjectId = string
 
 import level from 'level-ts'
-import { Object, ObjectType,
-         TransactionObjectType, BlockObjectType } from './message'
+import { ObjectType,
+         TransactionObject,
+         ErrorMessage,
+         ErrorMessageType,
+         CoinbaseTransactionObject,
+         BlockObject} from './message'
 import { Transaction } from './transaction'
 import { Block } from './block'
 import { logger } from './logger'
@@ -10,9 +14,16 @@ import { hash } from './crypto/hash'
 import { Peer } from './peer'
 import { Deferred, delay, resolveToReject } from './promise'
 import { mempool } from './mempool'
+import { Literal, match, Record, Static, Union, when } from 'runtypes'
 
 export const db = new level('./db')
 const OBJECT_AVAILABILITY_TIMEOUT = 5000 // ms
+
+export const ValidationResult = Union(
+  Record({ success: Literal(true) }),
+  Record({ success: Literal(false), error: ErrorMessage })
+)
+export type ValidationResultType = Static<typeof ValidationResult>
 
 /**
  * Interfaces the database
@@ -80,14 +91,46 @@ class ObjectManager {
     return await db.del('object:' + objectid)
   }
 
-  async put(object: any) {
+  async put(object: ObjectType) {
     const objectid = this.id(object)
     await db.put('object:' + objectid, object)
     return objectid
   }
 
-  async validate(object: ObjectType, peer: Peer) {
-    /* TODO */
+  async validate(object: ObjectType, peer: Peer) : Promise<ValidationResultType> {
+    const ok: ValidationResultType = { success: true }
+    return await match(
+
+      when(TransactionObject, async obj => {
+        // check if all objects referenced by inputs are known
+        for (const input of obj.inputs) {
+          if (!await this.exists(input.outpoint.txid)) {
+            const error: ErrorMessageType = {
+              type: 'error',
+              msg: `Referenced txid not found: ${input.outpoint.txid}`,
+              name: 'UNKNOWN_OBJECT'
+            }
+            return { success: false, error }
+          }
+        }
+        return ok
+      }),
+
+      when(CoinbaseTransactionObject, async obj => {
+        return ok
+      }),
+
+      when(BlockObject, async obj => {
+        // todo: for assignment 2, only transaction objects are valid
+        const error: ErrorMessageType = {
+          type: 'error',
+          msg: 'Invalid object received',
+          name: 'INVALID_FORMAT'
+        }
+        return { success: false, error }
+      })
+
+    )(object)
   }
 
   /**

@@ -42,11 +42,22 @@ export const TransactionOutputObject = Record({
 })
 export type TransactionOutputObjectType = Static<typeof TransactionOutputObject>
 
+export const CoinbaseTransactionObject = Record({
+  type: Literal('transaction'),
+  height: NonNegative,
+  outputs: Array(TransactionOutputObject)
+})
+export type CoinbaseTransactionObjectType = Static<typeof CoinbaseTransactionObject>
+
 /* TODO */
-export const CoinbaseTransactionObject = Boolean
 export const SpendingTransactionObject = Boolean
-export const TransactionObject = Boolean
-export type TransactionObjectType = Boolean
+
+export const TransactionObject = Record({
+  type: Literal('transaction'),
+  inputs: Array(TransactionInputObject),
+  outputs: Array(TransactionOutputObject)
+})
+export type TransactionObjectType = Static<typeof TransactionObject>
 
 export const BlockObject = Record({
   type: Literal('block'),
@@ -103,12 +114,12 @@ export const IHaveObjectMessage = Record({
 })
 export type IHaveObjectMessageType = Static<typeof IHaveObjectMessage>
 
-export const Object = String
-export type ObjectType = String
+export const Object = Union(TransactionObject, CoinbaseTransactionObject, BlockObject)
+export type ObjectType = Static<typeof Object>
 
 export const ObjectMessage = Record({
   type: Literal('object'),
-  object: Union(OutpointObject, TransactionInputObject, TransactionOutputObject, BlockObject)
+  object: Object
 })
 export type ObjectMessageType = Static<typeof ObjectMessage>
 
