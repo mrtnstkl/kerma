@@ -1,12 +1,14 @@
 export type ObjectId = string
 
 import level from 'level-ts'
-import { ObjectType,
-         TransactionObject,
-         ErrorMessage,
-         ErrorMessageType,
-         CoinbaseTransactionObject,
-         BlockObject} from './message'
+import {
+  Object, ObjectType,
+  TransactionObject,
+  ErrorMessage,
+  ErrorMessageType,
+  CoinbaseTransactionObject,
+  BlockObject
+} from './message'
 import { Transaction } from './transaction'
 import { Block } from './block'
 import { logger } from './logger'
@@ -83,16 +85,18 @@ class ObjectManager {
     return await db.exists('object:' + objectid)
   }
 
-  async get(objectid: ObjectId) {
+  async get(objectid: ObjectId) : Promise<ObjectType> {
     return await db.get('object:' + objectid)
   }
 
   async del(objectid: ObjectId) {
+    logger.info(`Deleting object ${objectid} from database`)
     return await db.del('object:' + objectid)
   }
 
   async put(object: ObjectType) {
     const objectid = this.id(object)
+    logger.info(`Storing object ${objectid} in database`)
     await db.put('object:' + objectid, object)
     return objectid
   }
