@@ -34,9 +34,40 @@ class ObjectManager {
   /* TODO */
 
   /**
+   * Clears all objects from the database
+   */
+  async clear() {
+    logger.info(`Clearing all objects from database`)
+    const objects = await db.stream({ all: 'object:' })
+    for (const { key, value } of objects) {
+      await db.del(key)
+    }
+  }
+
+  /**
+   * Dumps all stored objects into a map and returns it
+   * @returns map of objectid -> object
+   */
+  async dump() {
+    const result = new Map<ObjectId, ObjectType>()
+    const objects = await db.stream({ all: 'object:' })
+    for (let { key, value } of objects) {
+      key = key.slice('object:'.length)
+      try {
+        value = Object.check(value)
+      } catch (error) {
+        logger.warn(`Invalid object in database with ID ${key}: %o`, error)
+        continue
+      }
+      result.set(key, value)
+    }
+    return result
+  }
+
+  /**
    * Converts an object to its canonical string representation
-   * @param obj 
-   * @returns 
+   * @param obj the object to serialize
+   * @returns canonical string representation
    */
   toCanonicalString(obj: any): string {
     if (Array.isArray(obj)) {
