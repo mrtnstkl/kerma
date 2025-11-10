@@ -130,7 +130,7 @@ export class Transaction {
   }
   toNetworkObject(signed: boolean = true): TransactionObjectType {
     /* TODO */
-    return true;
+    throw new Error('Not implemented');
   }
   toString() {
     /* TODO */

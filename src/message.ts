@@ -9,7 +9,7 @@ import {
  * This file defines all Objects and Message Types that can be conveniently be used later
  */
 
-const Hash = String.withConstraint(s => true) /* TODO */
+const Hash = String.withConstraint(s => /^[0-9a-f]{64}$/.test(s))
 const Sig = String.withConstraint(s => true) /* TODO */
 const PK = String.withConstraint(s => true) /* TODO */
 const NonNegative = Number.withConstraint(n => true) /* TODO */
@@ -42,11 +42,22 @@ export const TransactionOutputObject = Record({
 })
 export type TransactionOutputObjectType = Static<typeof TransactionOutputObject>
 
+export const CoinbaseTransactionObject = Record({
+  type: Literal('transaction'),
+  height: NonNegative,
+  outputs: Array(TransactionOutputObject)
+})
+export type CoinbaseTransactionObjectType = Static<typeof CoinbaseTransactionObject>
+
 /* TODO */
-export const CoinbaseTransactionObject = Boolean
 export const SpendingTransactionObject = Boolean
-export const TransactionObject = Boolean
-export type TransactionObjectType = Boolean
+
+export const TransactionObject = Record({
+  type: Literal('transaction'),
+  inputs: Array(TransactionInputObject),
+  outputs: Array(TransactionOutputObject)
+})
+export type TransactionObjectType = Static<typeof TransactionObject>
 
 export const BlockObject = Record({
   type: Literal('block'),
@@ -92,23 +103,23 @@ export const PeersMessage = Record({
 export type PeersMessageType = Static<typeof PeersMessage>
 
 export const GetObjectMessage = Record({
-  type: Literal('getobject')
-  /* TODO: finish this type */
+  type: Literal('getobject'),
+  objectid: Hash
 })
 export type GetObjectMessageType = Static<typeof GetObjectMessage>
 
 export const IHaveObjectMessage = Record({
-  type: Literal('ihaveobject')
-  /* TODO: finish this type */
+  type: Literal('ihaveobject'),
+  objectid: Hash
 })
 export type IHaveObjectMessageType = Static<typeof IHaveObjectMessage>
 
-export const Object = String
-export type ObjectType = String
+export const Object = Union(TransactionObject, CoinbaseTransactionObject, BlockObject)
+export type ObjectType = Static<typeof Object>
 
 export const ObjectMessage = Record({
-  type: Literal('object')
-  /* TODO: finish this type */
+  type: Literal('object'),
+  object: Object
 })
 export type ObjectMessageType = Static<typeof ObjectMessage>
 
@@ -136,7 +147,11 @@ export const MempoolMessage = Record({
 })
 export type MempoolMessageType = Static<typeof MempoolMessage>
 
-export const ErrorCode = Union(Literal('INVALID_FORMAT'), Literal('INVALID_HANDSHAKE')) // TODO: Add rest of the error codes
+export const ErrorCode = Union(
+  Literal('INVALID_FORMAT'),
+  Literal('INVALID_HANDSHAKE'),
+  Literal('UNKNOWN_OBJECT')
+) // TODO: Add rest of the error codes
 export type ErrorCodeType = Static<typeof ErrorCode>
 
 export const ErrorMessage = Record({

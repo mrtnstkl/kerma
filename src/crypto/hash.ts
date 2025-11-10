@@ -1,7 +1,9 @@
+import { createHash } from 'crypto'
+
 /**
  * returns the sha256 representation of given string
  * @param str 
  */
 export function hash(str: string) {
-  /* TODO */
+  return createHash('BLAKE2s256').update(str).digest('hex')
 }
