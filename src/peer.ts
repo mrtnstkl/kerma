@@ -209,29 +209,29 @@ export class Peer {
     this.handshakeCompleted = true
   }
   async onMessagePeers(msg: PeersMessageType) {
-      if (this.hasExtraFields(msg, PeersMessage.fields)) {
-          return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
-      }
+    if (this.hasExtraFields(msg, PeersMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
 
-      if(msg.peers.length > 30)
-          return await this.fatalError('INVALID_FORMAT', `Send too many peers`)
+    if (msg.peers.length > 30)
+      return await this.fatalError('INVALID_FORMAT', `Send too many peers`)
 
-      for (const peer of msg.peers) {
-          if (!peerManager.validateAddress(peer)) {
-              return await this.fatalError('INVALID_FORMAT', `Invalid peer ${peer}`)
-          } else {
-              this.info(`Peer known: ${peer}`)
-              peerManager.peerDiscovered(peer)
-          }
+    for (const peer of msg.peers) {
+      if (!peerManager.validateAddress(peer)) {
+        return await this.fatalError('INVALID_FORMAT', `Invalid peer ${peer}`)
+      } else {
+        this.info(`Peer known: ${peer}`)
+        peerManager.peerDiscovered(peer)
       }
+    }
   }
   async onMessageGetPeers(msg: GetPeersMessageType) {
-      if (this.hasExtraFields(msg, GetPeersMessage.fields)) {
-          return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
-      }
+    if (this.hasExtraFields(msg, GetPeersMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
 
-      this.info(`Requesting Peers message received`)
-      await this.sendPeers()
+    this.info(`Requesting Peers message received`)
+    await this.sendPeers()
   }
   async onMessageIHaveObject(msg: IHaveObjectMessageType) {
     if (this.hasExtraFields(msg, IHaveObjectMessage.fields)) {
@@ -239,10 +239,11 @@ export class Peer {
     }
     // check if we have the object
     if (!await objectManager.exists(msg.objectid)) {
-        // we dont, so request it
-        this.info(`Requesting object ${msg.objectid} from peer`)
-        await this.sendGetObject(msg.objectid)
+      // we dont, so request it
+      this.info(`Requesting object ${msg.objectid} from peer`)
+      await this.sendGetObject(msg.objectid)
     }
+    // ignore if we already have it
   }
   async onMessageGetObject(msg: GetObjectMessageType) {
     if (this.hasExtraFields(msg, GetObjectMessage.fields)) {
@@ -250,14 +251,14 @@ export class Peer {
     }
     // check if we have the object
     if (await objectManager.exists(msg.objectid)) {
-        // we do, so send it
-        const object = await objectManager.get(msg.objectid)
-        this.info(`Sending object ${msg.objectid} to peer`)
-        await this.sendObject(object)
+      // we do, so send it
+      const object = await objectManager.get(msg.objectid)
+      this.info(`Sending object ${msg.objectid} to peer`)
+      await this.sendObject(object)
     } else {
-        // we dont, so send error
-        this.debug(`Requested object ${msg.objectid} not found locally`)
-        return this.sendError('UNKNOWN_OBJECT', `Object ${msg.objectid} not known`)
+      // we dont, so send error
+      this.debug(`Requested object ${msg.objectid} not found locally`)
+      return this.sendError('UNKNOWN_OBJECT', `Object ${msg.objectid} not known`)
     }
   }
   async onMessageObject(msg: ObjectMessageType) {
@@ -266,18 +267,18 @@ export class Peer {
     }
     // check if we have the object
     if (!await objectManager.exists(objectManager.id(msg.object))) {
-        // we dont, so validate and store it
-        const validation = await objectManager.validate(msg.object, this)
-        if (validation.success) {
-          this.info(`Received new object from peer`)
-          await objectManager.put(msg.object)
-        } else {
-          this.debug(`Received object is invalid: ${validation.error.msg}`)
-          return this.sendError(validation.error.name, validation.error.msg)
-        }
+      // we dont, so validate and store it
+      const validation = await objectManager.validate(msg.object, this)
+      if (validation.success) {
+        this.info(`Received new object from peer`)
+        await objectManager.put(msg.object)
+        // todo: gissip to other peers
+      } else {
+        this.debug(`Received object is invalid: ${validation.error.msg}`)
+        return this.sendError(validation.error.name, validation.error.msg)
+      }
     } else {
-        // todo: do we react to already known objects?
-        this.debug(`Received object is already known`)
+      this.debug(`Received object is already known`)
     }
   }
   async onMessageGetChainTip(msg: GetChainTipMessageType) {
