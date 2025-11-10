@@ -266,19 +266,19 @@ export class Peer {
       return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
     }
     // check if we have the object
-    if (!await objectManager.exists(objectManager.id(msg.object))) {
-      // we dont, so validate and store it
-      const validation = await objectManager.validate(msg.object, this)
-      if (validation.success) {
-        this.info(`Received new object from peer`)
-        await objectManager.put(msg.object)
-        // todo: gissip to other peers
-      } else {
-        this.debug(`Received object is invalid: ${validation.error.msg}`)
-        return this.sendError(validation.error.name, validation.error.msg)
-      }
-    } else {
+    if (await objectManager.exists(objectManager.id(msg.object))) {
       this.debug(`Received object is already known`)
+      return
+    }
+    // we dont, so validate and store it
+    const validation = await objectManager.validate(msg.object, this)
+    if (validation.success) {
+      this.info(`Received new object from peer`)
+      await objectManager.put(msg.object)
+      // todo: gissip to other peers
+    } else {
+      this.debug(`Received object is invalid: ${validation.error.msg}`)
+      return this.sendError(validation.error.name, validation.error.msg)
     }
   }
   async onMessageGetChainTip(msg: GetChainTipMessageType) {
