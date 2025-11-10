@@ -71,36 +71,18 @@ class ObjectManager {
    */
   toCanonicalString(obj: any): string {
     if (Array.isArray(obj)) {
-      const arrStr = obj.map((item) => {
-        if (typeof item === 'object' && item !== null) {
-          return this.toCanonicalString(item)
-        } else {
-          return JSON.stringify(item)
-        }
-      })
-      return '[' + arrStr.join(',') + ']'
-    } else if (typeof obj === 'object' && obj !== null) {
-      let str = '{'
-      const keys = globalThis.Object.keys(obj).sort()
-      for (let i = 0; i < keys.length; i++) {
-        const key = keys[i]
-        str += JSON.stringify(key) + ':'
-        const value = obj[key]
-        if (typeof value === 'object' && value !== null) {
-          str += this.toCanonicalString(value)
-        } else {
-          str += JSON.stringify(value)
-        }
-        if (i < keys.length - 1) {
-          str += ','
-        }
-      }
-      str += '}'
-      return str
-    } else {
-      // Handle primitives
-      return JSON.stringify(obj)
+      // arrays
+      const arrItems = obj.map(item => this.toCanonicalString(item))
+      return '[' + arrItems.join(',') + ']'
     }
+    if (typeof obj === 'object' && obj !== null) {
+      // objects
+      const keys = globalThis.Object.keys(obj).sort()
+      const keyValuePairs = keys.map(key => `"${key}":${this.toCanonicalString(obj[key])}`)
+      return '{' + keyValuePairs.join(',') + '}'
+    }
+    // primitives
+    return JSON.stringify(obj)
   }
 
   id(obj: any) {
