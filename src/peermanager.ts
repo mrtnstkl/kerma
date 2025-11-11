@@ -12,8 +12,7 @@ class PeerManager {
 
   async load() {
     let peersFromDb: string[] = []
-    if (await db.exists('knownPeers'))
-    {
+    if (await db.exists('knownPeers')) {
       try {
         peersFromDb = rt.Array(rt.String).check(await db.get('knownPeers'))
         logger.info(`Loaded %d known peers from database`, peersFromDb.length)

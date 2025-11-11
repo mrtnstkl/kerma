@@ -36,21 +36,24 @@ class Network {
     logger.info('Performing initial connection to all known peers...')
 
     for (const peerAddr of peerManager.knownPeers) {
-        if ([...this.peers].some(peer => peer.peerAddr === peerAddr)){
-            //connection already there
-            continue
-        }
-        try {
-            const client = MessageSocket.createClient(peerAddr)
-            const peer = new Peer(client, peerAddr)
-            await peer.onConnect()
-            this.peers.add(peer)
-        } catch (error) {
-            //Node not reachable, drop it
-            logger.warn(`Failed to connect to peer ${peerAddr}. Dropping...`)
-            peerManager.peerFailed(peerAddr)
-        }
+      if ([...this.peers].some(peer => peer.peerAddr === peerAddr)) {
+        // connection already there
+        continue
       }
+      try {
+        const client = await MessageSocket.createClient(peerAddr)
+        const peer = new Peer(client, peerAddr)
+
+        // In createClient we listen for 'connect' event, so the peer won't get it.
+        peer.onConnect()
+
+        this.peers.add(peer)
+      } catch (error) {
+        // Node not reachable, drop it
+        logger.warn(`Failed to connect to peer ${peerAddr}. Dropping...`)
+        peerManager.peerFailed(peerAddr)
+      }
+    }
   }
 
   broadcast(obj: object) {
@@ -64,15 +67,25 @@ export class MessageSocket extends EventEmitter {
   netSocket: net.Socket
   readlineInterface: readline.Interface
   peerAddr: string
-  buffer: string = ''
-  /* TODO */
 
-  static createClient(peerAddr: string) {
-    /* TODO */
-    const netSocket = new net.Socket()
-    const socket = new MessageSocket(netSocket, peerAddr)
-    /* TODO */
-    return socket
+  static createClient(peerAddr: string): Promise<MessageSocket> {
+    return new Promise((resolve, reject) => {
+      const [host, portStr] = peerAddr.split(':');
+      const port = parseInt(portStr, 10);
+
+      const netSocket = new net.Socket();
+
+      netSocket.on('error', (err) => {
+        netSocket.destroy();
+        reject(err); // This will be caught by the try...catch in Network.init
+      });
+
+      netSocket.connect(port, host, () => {
+        // Create the MessageSocket after connecting
+        const socket = new MessageSocket(netSocket, peerAddr);
+        resolve(socket); // Return the connected socket
+      });
+    });
   }
 
   constructor(netSocket: net.Socket, peerAddr: string) {

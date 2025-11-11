@@ -18,7 +18,10 @@ import { Deferred, delay, resolveToReject } from './promise'
 import { mempool } from './mempool'
 import { Literal, match, Record, Static, Union, when } from 'runtypes'
 
-export const db = new level('./db')
+const envDatabaseDirectory = process.env.OBJECT_DATABASE_DIRECTORY;
+const databaseDirectory = (envDatabaseDirectory !== undefined && envDatabaseDirectory !== '') ? envDatabaseDirectory : './db'
+
+export const db = new level(databaseDirectory)
 const OBJECT_AVAILABILITY_TIMEOUT = 5000 // ms
 
 export const ValidationResult = Union(
@@ -98,7 +101,7 @@ class ObjectManager {
     return await db.exists('object:' + objectid)
   }
 
-  async get(objectid: ObjectId) : Promise<ObjectType> {
+  async get(objectid: ObjectId): Promise<ObjectType> {
     return await db.get('object:' + objectid)
   }
 
@@ -114,7 +117,7 @@ class ObjectManager {
     return objectid
   }
 
-  async validate(object: ObjectType, peer: Peer) : Promise<ValidationResultType> {
+  async validate(object: ObjectType, peer: Peer): Promise<ValidationResultType> {
     const ok: ValidationResultType = { success: true }
     return await match(
 
@@ -156,7 +159,7 @@ class ObjectManager {
    * @param peer the peer you want to get the object from
    * @returns the object, or rejects if not possible
    */
-  async retrieve(objectid: ObjectId, peer: Peer): Promise<Boolean>  { // todo: Promise<ObjectType>
+  async retrieve(objectid: ObjectId, peer: Peer): Promise<Boolean> { // todo: Promise<ObjectType>
     /* TODO */
     return true
   }
