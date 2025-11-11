@@ -15,23 +15,24 @@ import { Block } from './block';
  * a class to represent a transaction output
  */
 export class Output {
-    /* TODO */
+    readonly pubkey: string;
+    readonly value: number;
 
     static fromNetworkObject(outputMsg: TransactionOutputObjectType): Output {
-        /* TODO */
-        const output = new Output('', 0);
+        const output = new Output(outputMsg.pubkey, outputMsg.value);
         return output;
     }
 
     constructor(pubkey: PublicKey, value: number) {
-        /* TODO */
+        this.pubkey = pubkey;
+        this.value = value;
     }
 
     toNetworkObject(): TransactionOutputObjectType {
         return {
-            pubkey: '0000000000000000000000000000000000000000000000000000000000000000',
-            value: 0,
-        }; /* TODO */
+            pubkey: this.pubkey,
+            value: this.value,
+        };
     }
 }
 
@@ -39,9 +40,11 @@ export class Output {
  * a class to represent a transaction outpoint
  */
 export class Outpoint {
-    /* TODO */
+    readonly txid: ObjectId;
+    readonly index: number;
     constructor(txid: ObjectId, index: number) {
-        /* TODO */
+        this.index = index;
+        this.txid = txid;
     }
 
     /**
@@ -49,42 +52,57 @@ export class Outpoint {
      * @returns the referenced output
      */
     async resolve(): Promise<Output> {
-        /* TODO */
-        return new Output('', 0);
+        const tx = (await objectManager.get(this.txid)) as TransactionObjectType;
+        if (!tx) {
+            throw new Error(`UNKNOWN_OBJECT: Transaction ${this.txid} not found in database.`);
+        }
+
+        const outputData = tx.outputs[this.index];
+        if (!outputData) {
+            throw new Error(
+                `Invalid outpoint: Index ${this.index} is out of bounds for tx ${this.txid}.`,
+            );
+        }
+
+        return new Output(outputData.pubkey, outputData.value);
     }
 
     toNetworkObject(): OutpointObjectType {
-        /* TODO */
         return {
-            txid: '0000000000000000000000000000000000000000000000000000000000000000',
-            index: 0,
+            txid: this.txid,
+            index: this.index,
         };
     }
 
     toString() {
-        /* TODO */
+        return `${this.txid}:${this.index}`;
+    }
+
+    static fromNetworkObject(obj: OutpointObjectType): Outpoint {
+        return new Outpoint(obj.txid, obj.index);
     }
 }
 
 export class Input {
-    /* TODO */
+    outpoint: Outpoint;
+    sig: string | null;
 
     static fromNetworkObject(inputMsg: TransactionInputObjectType): Input {
-        /* TODO */
-        return new Input();
+        const outpoint = Outpoint.fromNetworkObject(inputMsg.outpoint);
+        return new Input(outpoint, inputMsg.sig);
     }
-    constructor(/* TODO */) {
-        /* TODO */
+    constructor(outpoint: Outpoint, sig: string | null) {
+        this.outpoint = outpoint;
+        this.sig = sig;
     }
 
     toNetworkObject(): TransactionInputObjectType {
-        /* TODO */
         return {
             outpoint: {
-                txid: '0000000000000000000000000000000000000000000000000000000000000000',
-                index: 0,
+                txid: this.outpoint.txid,
+                index: this.outpoint.index,
             },
-            sig: '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+            sig: this.sig,
         };
     }
 
@@ -92,8 +110,7 @@ export class Input {
      * @returns this input without a signature
      */
     toUnsigned(): Input {
-        /* TODO */
-        return new Input();
+        return new Input(this.outpoint, '');
     }
 }
 
@@ -101,40 +118,71 @@ export class Input {
  * a class to represent transactions
  */
 export class Transaction {
-    /* TODO */
+    readonly inputs: Input[] | undefined;
+    readonly outputs: Output[];
+    readonly height?: number | undefined;
 
     static inputsFromNetworkObject(inputMsgs: TransactionInputObjectType[]) {
-        /* TODO */
+        return inputMsgs.map((msg) => Input.fromNetworkObject(msg));
     }
     static outputsFromNetworkObject(outputMsgs: TransactionOutputObjectType[]) {
-        /* TODO */
+        return outputMsgs.map((msg) => Output.fromNetworkObject(msg));
     }
     static fromNetworkObject(txObj: TransactionObjectType): Transaction {
-        /* TODO */
-        return new Transaction();
+        const outputs = Transaction.outputsFromNetworkObject(txObj.outputs);
+
+        if (txObj.inputs) {
+            const inputs = Transaction.inputsFromNetworkObject(txObj.inputs);
+            return new Transaction(outputs, inputs, undefined);
+        }
+        //TODO: differ coinbase transaction
     }
     static async byId(txid: ObjectId): Promise<Transaction> {
-        /* TODO */
-        return new Transaction();
+        const tx = (await objectManager.get(txid)) as TransactionObjectType;
+        if (!tx) {
+            throw new Error(`UNKNOWN_OBJECT: Transaction ${txid} not found.`);
+        }
+        return Transaction.fromNetworkObject(tx);
     }
-    constructor(/* TODO */) {
-        /* TODO */
+    constructor(outputs: Output[], inputs?: Input[], height?: number) {
+        this.outputs = outputs;
+        this.inputs = inputs;
+        this.height = height;
     }
     isCoinbase(): Boolean {
-        /* TODO */
-        return false;
+        return !this.inputs || this.inputs.length === 0;
     }
     async validate(idx?: number, block?: Block) {
         /* TODO */
     }
-    inputsUnsigned() {
-        /* TODO */
+    inputsUnsigned(): Input[] {
+        if (!this.inputs) {
+            return [];
+        }
+        return this.inputs.map((input) => input.toUnsigned());
     }
     toNetworkObject(signed: boolean = true): TransactionObjectType {
-        /* TODO */
-        throw new Error('Not implemented');
+        const outputs = this.outputs.map((output) => output.toNetworkObject());
+
+        if (this.isCoinbase()) {
+            return {
+                type: 'transaction',
+                height: this.height,
+                outputs: outputs,
+            };
+        }
+
+        const inputs = signed
+            ? this.inputs?.map((input) => input.toNetworkObject())
+            : this.inputsUnsigned().map((input) => input.toNetworkObject());
+
+        return {
+            type: 'transaction',
+            inputs: inputs,
+            outputs: outputs,
+        };
     }
     toString() {
-        /* TODO */
+        return `Transaction(${this.isCoinbase() ? 'COINBASE' : 'REGULAR'} | ${this.outputs.length} outputs)`;
     }
 }
