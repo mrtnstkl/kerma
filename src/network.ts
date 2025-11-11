@@ -33,24 +33,28 @@ class Network {
     logger.info(`Listening for connections on port ${bindPort} and IP ${bindIP}`)
     server.listen(bindPort, bindIP)
 
-    logger.info('Performing initial connection to all known peers...')
-
-    for (const peerAddr of peerManager.knownPeers) {
-        if ([...this.peers].some(peer => peer.peerAddr === peerAddr)){
-            //connection already there
-            continue
-        }
-        try {
-            const client = MessageSocket.createClient(peerAddr)
-            const peer = new Peer(client, peerAddr)
-            await peer.onConnect()
-            this.peers.add(peer)
-        } catch (error) {
-            //Node not reachable, drop it
-            logger.warn(`Failed to connect to peer ${peerAddr}. Dropping...`)
-            peerManager.peerFailed(peerAddr)
-        }
-      }
+    // TODO: Temporarily disabled.
+    //
+    // logger.info('Performing initial connection to all known peers...')
+    //
+    // for (const peerAddr of peerManager.knownPeers) {
+    //   if ([...this.peers].some(peer => peer.peerAddr === peerAddr)) {
+    //     //connection already there
+    //     continue
+    //   }
+    //   try {
+    //     const client = MessageSocket.createClient(peerAddr)
+    //     const peer = new Peer(client, peerAddr)
+    //
+    //     // TODO: Here socket connection must be established (not a peer onConnect call)
+    //
+    //     this.peers.add(peer)
+    //   } catch (error) {
+    //     //Node not reachable, drop it
+    //     logger.warn(`Failed to connect to peer ${peerAddr}. Dropping...`)
+    //     peerManager.peerFailed(peerAddr)
+    //   }
+    // }
   }
 
   broadcast(obj: object) {
@@ -90,6 +94,18 @@ export class MessageSocket extends EventEmitter {
     this.readlineInterface.on('line', (line) => {
       this.emit('message', line)
     })
+  }
+
+  /**
+  * Connect to the underlying net socket.
+  *
+  * Should only be called when a connection was node made yet.
+  */
+  connect() {
+    const [host, portString] = this.peerAddr.split(':')
+    const port = parseInt(portString, 10)
+
+    this.netSocket.connect(port, host)
   }
 
   sendMessage(message: string, callback?: (err?: Error) => void) {

@@ -57,15 +57,15 @@ export class Peer {
   }
   async sendGetPeers() {
     const getPeersRequest: GetPeersMessageType = {
-        type: 'getpeers'
+      type: 'getpeers'
     };
 
     this.sendMessage(getPeersRequest);
   }
   async sendPeers() {
     const sendPeersMessage: PeersMessageType = {
-        type: 'peers',
-        peers: [HOST_ADDRESS,...[...peerManager.knownPeers].slice(0, MAX_PEERS_PER_PEER-1)]
+      type: 'peers',
+      peers: [HOST_ADDRESS, ...[...peerManager.knownPeers].slice(0, MAX_PEERS_PER_PEER - 1)]
     }
 
     this.sendMessage(sendPeersMessage);
@@ -209,28 +209,28 @@ export class Peer {
     this.handshakeCompleted = true
   }
   async onMessagePeers(msg: PeersMessageType) {
-      if (this.hasExtraFields(msg, PeersMessage.fields)) {
-          return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
-      }
+    if (this.hasExtraFields(msg, PeersMessage.fields)) {
+      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
+    }
 
-        //Max entry size 30
-      if (msg.peers.length > 30) {
-          return await this.fatalError('INVALID_FORMAT', `Sent too many peers`)
-      }
+    //Max entry size 30
+    if (msg.peers.length > 30) {
+      return await this.fatalError('INVALID_FORMAT', `Sent too many peers`)
+    }
 
-        //Check if all peers are valid
-      for (const peer of msg.peers) {
-          if (!peerManager.validateAddress(peer)) {
-              // If any peer is invalid, reject the entire message.
-              return await this.fatalError('INVALID_FORMAT', `Invalid peer ${peer}`)
-          }
+    //Check if all peers are valid
+    for (const peer of msg.peers) {
+      if (!peerManager.validateAddress(peer)) {
+        // If any peer is invalid, reject the entire message.
+        return await this.fatalError('INVALID_FORMAT', `Invalid peer ${peer}`)
       }
+    }
 
-        //Only if all peers were valid, add all of them with another loop
-      for (const peer of msg.peers) {
-          this.info(`Peer known: ${peer}`)
-          peerManager.peerDiscovered(peer)
-      }
+    //Only if all peers were valid, add all of them with another loop
+    for (const peer of msg.peers) {
+      this.info(`Peer known: ${peer}`)
+      peerManager.peerDiscovered(peer)
+    }
   }
   async onMessageGetPeers(msg: GetPeersMessageType) {
     if (this.hasExtraFields(msg, GetPeersMessage.fields)) {
