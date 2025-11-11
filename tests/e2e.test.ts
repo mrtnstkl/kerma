@@ -18,8 +18,13 @@ class SocketWithBuffers {
   receivedMessages: Array<string> = []
   receivedError: Boolean = false
 
-  constructor(host: string = DEFAULT_HOST) {
-    this.socket = MessageSocket.createClient(host)
+  static async create(host: string = DEFAULT_HOST) {
+    const socket = await MessageSocket.createClient(host)
+    return new SocketWithBuffers(socket)
+  }
+
+  constructor(socket: MessageSocket) {
+    this.socket = socket
 
     this.socket.on('message', (message: string) => {
       this.receivedMessages.push(message)
@@ -28,8 +33,6 @@ class SocketWithBuffers {
     this.socket.on('error', () => {
       this.receivedError = true
     })
-
-    this.socket.connect()
   }
 
   sendMessage(message: string) {
@@ -93,7 +96,7 @@ afterAll(() => {
 })
 
 test('connects and sends initial messages', async () => {
-  const peer = new SocketWithBuffers()
+  const peer = await SocketWithBuffers.create()
 
   await new Promise((res) => setTimeout(res, 1000))
 
@@ -112,7 +115,7 @@ test('fails on invalid hello message', async () => {
   ]
 
   for (const message of invalidMessagees) {
-    const peer = new SocketWithBuffers()
+    const peer = await SocketWithBuffers.create()
 
     peer.sendMessage(message)
 
@@ -123,7 +126,7 @@ test('fails on invalid hello message', async () => {
 })
 
 test('fails on no hello message', async () => {
-  const peer = new SocketWithBuffers()
+  const peer = await SocketWithBuffers.create()
 
   await new Promise((res) => setTimeout(res, 21000)) // Wait for over 20 seconds
 
