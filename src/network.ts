@@ -6,7 +6,7 @@ import { EventEmitter } from 'events'
 import { peerManager } from './peermanager'
 
 class Network {
-  peers: Set<string> = new Set()
+  peers: Set<Peer> = new Set()
 
   async init(bindPort: number, bindIP: string) {
     await peerManager.load()
@@ -23,7 +23,7 @@ class Network {
       const client = new MessageSocket(socket, remoteAddrWithPort)
       const peer = new Peer(client, remoteAddrWithPort)
 
-      this.peers.add(peer.peerAddr)
+      this.peers.add(peer)
 
       // As there will be no connect event sent by the socket, notify the peer about the connection here.
       peer.onConnect()
@@ -36,7 +36,7 @@ class Network {
     logger.info('Performing initial connection to all known peers...')
 
     for (const peerAddr of peerManager.knownPeers) {
-        if (this.peers.has(peerAddr)){
+        if ([...this.peers].some(peer => peer.peerAddr === peerAddr)){
             //connection already there
             continue
         }
@@ -44,7 +44,7 @@ class Network {
             const client = MessageSocket.createClient(peerAddr)
             const peer = new Peer(client, peerAddr)
             await peer.onConnect()
-            this.peers.add(peerAddr)
+            this.peers.add(peer)
         } catch (error) {
             //Node not reachable, drop it
             logger.warn(`Failed to connect to peer ${peerAddr}. Dropping...`)
