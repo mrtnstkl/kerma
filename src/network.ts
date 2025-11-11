@@ -43,8 +43,8 @@ class Network {
         try {
             const client = MessageSocket.createClient(peerAddr)
             const peer = new Peer(client, peerAddr)
-            this.peers.add(peerAddr)
             await peer.onConnect()
+            this.peers.add(peerAddr)
         } catch (error) {
             //Node not reachable, drop it
             logger.warn(`Failed to connect to peer ${peerAddr}. Dropping...`)
