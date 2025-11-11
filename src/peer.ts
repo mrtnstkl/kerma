@@ -209,21 +209,28 @@ export class Peer {
     this.handshakeCompleted = true
   }
   async onMessagePeers(msg: PeersMessageType) {
-    if (this.hasExtraFields(msg, PeersMessage.fields)) {
-      return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
-    }
-
-    if (msg.peers.length > 30)
-      return await this.fatalError('INVALID_FORMAT', `Send too many peers`)
-
-    for (const peer of msg.peers) {
-      if (!peerManager.validateAddress(peer)) {
-        return await this.fatalError('INVALID_FORMAT', `Invalid peer ${peer}`)
-      } else {
-        this.info(`Peer known: ${peer}`)
-        peerManager.peerDiscovered(peer)
+      if (this.hasExtraFields(msg, PeersMessage.fields)) {
+          return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS)
       }
-    }
+
+        //Max entry size 30
+      if (msg.peers.length > 30) {
+          return await this.fatalError('INVALID_FORMAT', `Sent too many peers`)
+      }
+
+        //Check if all peers are valid
+      for (const peer of msg.peers) {
+          if (!peerManager.validateAddress(peer)) {
+              // If any peer is invalid, reject the entire message.
+              return await this.fatalError('INVALID_FORMAT', `Invalid peer ${peer}`)
+          }
+      }
+
+        //Only if all peers were valid, add all of them with another loop
+      for (const peer of msg.peers) {
+          this.info(`Peer known: ${peer}`)
+          peerManager.peerDiscovered(peer)
+      }
   }
   async onMessageGetPeers(msg: GetPeersMessageType) {
     if (this.hasExtraFields(msg, GetPeersMessage.fields)) {
