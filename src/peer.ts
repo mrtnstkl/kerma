@@ -297,8 +297,9 @@ export class Peer {
     const validation = await objectManager.validate(msg.object, this);
     if (validation.success) {
       this.info(`Received new object from peer`);
-      await objectManager.put(msg.object);
-      // todo: gissip to other peers
+      const objectId = await objectManager.put(msg.object);
+      // gissip to other peers
+      network.broadcast(objectId);
     } else {
       this.debug(`Received object is invalid: ${validation.error.msg}`);
       return this.sendError(validation.error.name, validation.error.msg);
