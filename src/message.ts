@@ -65,6 +65,9 @@ export const TransactionObject = Record({
 });
 export type TransactionObjectType = Static<typeof TransactionObject>;
 
+export const GeneralTransactionObject = Union(TransactionObject, CoinbaseTransactionObject);
+export type GeneralTransactionObjectType = Static<typeof GeneralTransactionObject>;
+
 export const BlockObject = Record({
   type: Literal('block'),
   txids: Array(Hash),

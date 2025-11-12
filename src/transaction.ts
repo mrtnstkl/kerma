@@ -5,8 +5,11 @@ import {
   TransactionOutputObjectType,
   OutpointObjectType,
   SpendingTransactionObject,
+  CoinbaseTransactionObjectType,
+  GeneralTransactionObjectType,
+  TransactionObject, CoinbaseTransactionObject,
 } from './message';
-import { PublicKey, Signature } from './crypto/signature';
+import {isValidPublicKey, PublicKey, Signature} from './crypto/signature';
 import { ver } from './crypto/signature';
 import { logger } from './logger';
 import { Block } from './block';
@@ -15,23 +18,23 @@ import { Block } from './block';
  * a class to represent a transaction output
  */
 export class Output {
-  /* TODO */
+  readonly pubkey: PublicKey;
+  readonly value: number;
 
   static fromNetworkObject(outputMsg: TransactionOutputObjectType): Output {
-    /* TODO */
-    const output = new Output('', 0);
-    return output;
+    return new Output(outputMsg.pubkey, outputMsg.value);
   }
 
   constructor(pubkey: PublicKey, value: number) {
-    /* TODO */
+    this.pubkey = pubkey;
+    this.value = value;
   }
 
   toNetworkObject(): TransactionOutputObjectType {
     return {
-      pubkey: '0000000000000000000000000000000000000000000000000000000000000000',
-      value: 0,
-    }; /* TODO */
+      pubkey: this.pubkey,
+      value: this.value,
+    };
   }
 }
 
@@ -119,23 +122,29 @@ export class Input {
 export class Transaction {
   readonly inputs: Input[] | undefined;
   readonly outputs: Output[];
-  readonly height?: number | undefined;
+  readonly height: number | undefined;
 
   static inputsFromNetworkObject(inputMsgs: TransactionInputObjectType[]) {
     return inputMsgs.map((msg) => Input.fromNetworkObject(msg));
   }
+
   static outputsFromNetworkObject(outputMsgs: TransactionOutputObjectType[]) {
     return outputMsgs.map((msg) => Output.fromNetworkObject(msg));
   }
-  static fromNetworkObject(txObj: TransactionObjectType): Transaction {
+
+  static fromNetworkObject(txObj: GeneralTransactionObjectType): Transaction {
     const outputs = Transaction.outputsFromNetworkObject(txObj.outputs);
 
-    if (txObj.inputs) {
-      const inputs = Transaction.inputsFromNetworkObject(txObj.inputs);
+    if (TransactionObject.validate(txObj).success) {
+      const inputs = Transaction.inputsFromNetworkObject((txObj as TransactionObjectType).inputs);
       return new Transaction(outputs, inputs, undefined);
+    } else if (CoinbaseTransactionObject.validate(txObj).success) {
+      return new Transaction(outputs, undefined, (txObj as CoinbaseTransactionObjectType).height);
+    } else {
+      throw new Error('Invalid Transaction object!');
     }
-    //TODO: differ coinbase transaction
   }
+
   static async byId(txid: ObjectId): Promise<Transaction> {
     const tx = (await objectManager.get(txid)) as TransactionObjectType;
     if (!tx) {
@@ -143,44 +152,118 @@ export class Transaction {
     }
     return Transaction.fromNetworkObject(tx);
   }
+
   constructor(outputs: Output[], inputs?: Input[], height?: number) {
     this.outputs = outputs;
     this.inputs = inputs;
     this.height = height;
   }
+
   isCoinbase(): Boolean {
-    return !this.inputs || this.inputs.length === 0;
+    return (!this.inputs || this.inputs.length === 0) && this.height != undefined;
   }
+
   async validate(idx?: number, block?: Block) {
-    /* TODO */
+    if (this.isCoinbase()) {
+      await this.validateCoinbase();
+    } else {
+      await this.validateNonCoinbase();
+    }
   }
+
+  private validateOutputs(): number {
+    let totalOutputValue = 0;
+    for (const output of this.outputs) {
+      if (!isValidPublicKey(output.pubkey)) {
+        throw new Error(`Invalid output: bad public key format ${output.pubkey}`);
+      }
+      if (!Number.isInteger(output.value) || output.value < 0) {
+        throw new Error(`Invalid output: value must be a non-negative integer.`);
+      }
+      totalOutputValue += output.value;
+    }
+    return totalOutputValue;
+  }
+
+  async validateCoinbase(): Promise<void> {
+    //Assumption in the assignment that syntactically correct
+    //coinbase transactions are always valid
+    this.validateOutputs();
+  }
+
+  private async validateNonCoinbase(): Promise<void> {
+    if (!this.inputs) {
+      throw new Error('Invalid Non-Coinbase-Transaction: Inputs are missing.');
+    }
+
+    let totalInputValue = 0;
+
+    // --- Step 2c: Validate Outputs ---
+    // First, check all outputs and sum their value.
+    const totalOutputValue = this.validateOutputs();
+
+    const unsignedTxObject = this.toNetworkObject(false);
+
+    const canonicalStringTxHash = objectManager.toCanonicalString(unsignedTxObject);
+
+    // --- Loop for Steps 2a & 2b ---
+    for (const input of this.inputs) {
+      const referencedOutput = await input.outpoint.resolve();
+
+      totalInputValue += referencedOutput.value;
+      const pubkey = referencedOutput.pubkey;
+      const signature = input.sig;
+
+      if (!signature || signature == '') {
+        throw new Error(`Input signature is null or undefined for ${input.outpoint.toString()}`);
+      }
+
+      const isSignatureValid = await ver(canonicalStringTxHash, signature, pubkey);
+
+      if (!isSignatureValid) {
+        throw new Error(`Invalid signature for input ${input.outpoint.toString()}`);
+      }
+    }
+
+    // --- Weak Law of Conservation ---
+    if (totalInputValue < totalOutputValue) {
+      throw new Error(
+        `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
+      );
+    }
+  }
+
   inputsUnsigned(): Input[] {
     if (!this.inputs) {
       return [];
     }
     return this.inputs.map((input) => input.toUnsigned());
   }
-  toNetworkObject(signed: boolean = true): TransactionObjectType {
-    const outputs = this.outputs.map((output) => output.toNetworkObject());
 
-    if (this.isCoinbase()) {
-      return {
-        type: 'transaction',
-        height: this.height,
-        outputs: outputs,
-      };
-    }
+  toNetworkObject(signed: boolean = true): GeneralTransactionObjectType {
+    const outputs = this.outputs.map((output) => output.toNetworkObject());
 
     const inputs = signed
       ? this.inputs?.map((input) => input.toNetworkObject())
       : this.inputsUnsigned().map((input) => input.toNetworkObject());
 
-    return {
-      type: 'transaction',
-      inputs: inputs,
-      outputs: outputs,
-    };
+    if ((!this.inputs || this.inputs.length === 0) && this.height != undefined) {
+      return {
+        type: 'transaction',
+        height: this.height,
+        outputs: outputs,
+      };
+    } else if (inputs != undefined) {
+      return {
+        type: 'transaction',
+        inputs: inputs,
+        outputs: outputs,
+      };
+    } else {
+      throw new Error('Invalid format of transaction network object');
+    }
   }
+
   toString() {
     return `Transaction(${this.isCoinbase() ? 'COINBASE' : 'REGULAR'} | ${this.outputs.length} outputs)`;
   }
