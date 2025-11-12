@@ -164,6 +164,8 @@ export class Transaction {
   }
 
   async validate(idx?: number, block?: Block) {
+      //TODO block level validation in the next task
+      //(i guess not part of this task as i read:))
     if (this.isCoinbase()) {
       await this.validateCoinbase();
     } else {
