@@ -5,5 +5,5 @@ import { createHash } from 'crypto';
  * @param str
  */
 export function hash(str: string) {
-    return createHash('BLAKE2s256').update(str).digest('hex');
+  return createHash('BLAKE2s256').update(str).digest('hex');
 }
