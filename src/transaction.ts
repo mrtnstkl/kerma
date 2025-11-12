@@ -7,9 +7,10 @@ import {
   SpendingTransactionObject,
   CoinbaseTransactionObjectType,
   GeneralTransactionObjectType,
-  TransactionObject, CoinbaseTransactionObject,
+  TransactionObject,
+  CoinbaseTransactionObject,
 } from './message';
-import {isValidPublicKey, PublicKey, Signature} from './crypto/signature';
+import { isValidPublicKey, PublicKey, Signature } from './crypto/signature';
 import { ver } from './crypto/signature';
 import { logger } from './logger';
 import { Block } from './block';
@@ -164,8 +165,8 @@ export class Transaction {
   }
 
   async validate(idx?: number, block?: Block) {
-      //TODO block level validation in the next task
-      //(i guess not part of this task as i read:))
+    //TODO block level validation in the next task
+    //(i guess not part of this task as i read:))
     if (this.isCoinbase()) {
       await this.validateCoinbase();
     } else {
