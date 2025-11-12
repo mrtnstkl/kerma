@@ -1,63 +1,69 @@
 import {
   Literal,
-  Record, Array, Union,
-  String, Number,
-  Static, Null, Unknown, Optional
-} from 'runtypes'
+  Record,
+  Array,
+  Union,
+  String,
+  Number,
+  Static,
+  Null,
+  Unknown,
+  Optional,
+} from 'runtypes';
 
 /**
  * This file defines all Objects and Message Types that can be conveniently be used later
  */
 
-const Hash = String.withConstraint(s => /^[0-9a-f]{64}$/.test(s))
-const Sig = String.withConstraint(s => true) /* TODO */
-const PK = String.withConstraint(s => true) /* TODO */
-const NonNegative = Number.withConstraint(n => true) /* TODO */
-const Coins = NonNegative
+const Hash = String.withConstraint((s) => /^[0-9a-f]{64}$/.test(s));
+const Sig = String.withConstraint((s) => true); /* TODO */
+const PK = String.withConstraint((s) => true); /* TODO */
+const NonNegative = Number.withConstraint((n) => true); /* TODO */
+const Coins = NonNegative;
 
 /**
- * this defines an OutpointObject to be a Record (something like a dictionary) 
- *  containing properties txid of type Hash and index of type NonNegative  
+ * this defines an OutpointObject to be a Record (something like a dictionary)
+ *  containing properties txid of type Hash and index of type NonNegative
  */
 export const OutpointObject = Record({
   txid: Hash,
-  index: NonNegative
-})
+  index: NonNegative,
+});
 
 /**
  * this exports a type for OutpointObject
  * you an use these as an example to define the other types
  */
-export type OutpointObjectType = Static<typeof OutpointObject>
+export type OutpointObjectType = Static<typeof OutpointObject>;
 
 export const TransactionInputObject = Record({
   outpoint: OutpointObject,
-  sig: Union(Sig, Null)
-})
-export type TransactionInputObjectType = Static<typeof TransactionInputObject>
+  sig: Union(Sig, Null),
+});
+export type TransactionInputObjectType = Static<typeof TransactionInputObject>;
 
 export const TransactionOutputObject = Record({
   pubkey: PK,
-  value: Coins
-})
-export type TransactionOutputObjectType = Static<typeof TransactionOutputObject>
+  value: Coins,
+});
+export type TransactionOutputObjectType = Static<typeof TransactionOutputObject>;
 
 export const CoinbaseTransactionObject = Record({
   type: Literal('transaction'),
   height: NonNegative,
-  outputs: Array(TransactionOutputObject)
-})
-export type CoinbaseTransactionObjectType = Static<typeof CoinbaseTransactionObject>
+  outputs: Array(TransactionOutputObject),
+});
+export type CoinbaseTransactionObjectType = Static<typeof CoinbaseTransactionObject>;
 
 /* TODO */
-export const SpendingTransactionObject = Boolean
+export const SpendingTransactionObject = Boolean;
 
 export const TransactionObject = Record({
   type: Literal('transaction'),
   inputs: Array(TransactionInputObject),
-  outputs: Array(TransactionOutputObject)
-})
-export type TransactionObjectType = Static<typeof TransactionObject>
+  outputs: Array(TransactionOutputObject),
+});
+export type TransactionObjectType = Static<typeof TransactionObject>;
 
 export const BlockObject = Record({
   type: Literal('block'),
@@ -66,11 +72,10 @@ export const BlockObject = Record({
   previd: Union(Hash, Null),
   created: Number,
   T: Hash,
-  miner: Optional(String), /* TODO: enforce checks */
-  note: Optional(String) /* TODO: enforce checks */
-})
-export type BlockObjectType = Static<typeof BlockObject>
-
+  miner: Optional(String) /* TODO: enforce checks */,
+  note: Optional(String) /* TODO: enforce checks */,
+});
+export type BlockObjectType = Static<typeof BlockObject>;
 
 // Helper types
 const Version = String.withConstraint((value) => /^0\.10\.[0-9]$/.test(value));
@@ -79,102 +84,111 @@ const Agent = String.withConstraint((value) => {
 
   // Check all characters are ASCII-printable
   return /^[\x20-\x7E]*$/.test(value);
-})
+});
 
 // Message types
 
 export const HelloMessage = Record({
   type: Literal('hello'),
   version: Version,
-  agent: Agent
-})
-export type HelloMessageType = Static<typeof HelloMessage>
+  agent: Agent,
+});
+export type HelloMessageType = Static<typeof HelloMessage>;
 
 export const GetPeersMessage = Record({
-
-  type: Literal('getpeers')
-})
-export type GetPeersMessageType = Static<typeof GetPeersMessage>
+  type: Literal('getpeers'),
+});
+export type GetPeersMessageType = Static<typeof GetPeersMessage>;
 
 export const PeersMessage = Record({
   type: Literal('peers'),
-  peers: Array(String)
-})
-export type PeersMessageType = Static<typeof PeersMessage>
+  peers: Array(String),
+});
+export type PeersMessageType = Static<typeof PeersMessage>;
 
 export const GetObjectMessage = Record({
   type: Literal('getobject'),
-  objectid: Hash
-})
-export type GetObjectMessageType = Static<typeof GetObjectMessage>
+  objectid: Hash,
+});
+export type GetObjectMessageType = Static<typeof GetObjectMessage>;
 
 export const IHaveObjectMessage = Record({
   type: Literal('ihaveobject'),
-  objectid: Hash
-})
-export type IHaveObjectMessageType = Static<typeof IHaveObjectMessage>
+  objectid: Hash,
+});
+export type IHaveObjectMessageType = Static<typeof IHaveObjectMessage>;
 
-export const Object = Union(TransactionObject, CoinbaseTransactionObject, BlockObject)
-export type ObjectType = Static<typeof Object>
+export const Object = Union(TransactionObject, CoinbaseTransactionObject, BlockObject);
+export type ObjectType = Static<typeof Object>;
 
 export const ObjectMessage = Record({
   type: Literal('object'),
-  object: Object
-})
-export type ObjectMessageType = Static<typeof ObjectMessage>
+  object: Object,
+});
+export type ObjectMessageType = Static<typeof ObjectMessage>;
 
 export const GetChainTipMessage = Record({
-  type: Literal('getchaintip')
+  type: Literal('getchaintip'),
   /* TODO: finish this type */
-})
-export type GetChainTipMessageType = Static<typeof GetChainTipMessage>
+});
+export type GetChainTipMessageType = Static<typeof GetChainTipMessage>;
 
 export const ChainTipMessage = Record({
-  type: Literal('chaintip')
+  type: Literal('chaintip'),
   /* TODO: finish this type */
-})
-export type ChainTipMessageType = Static<typeof ChainTipMessage>
+});
+export type ChainTipMessageType = Static<typeof ChainTipMessage>;
 
 export const GetMempoolMessage = Record({
-  type: Literal('getmempool')
+  type: Literal('getmempool'),
   /* TODO: finish this type */
-})
-export type GetMempoolMessageType = Static<typeof GetMempoolMessage>
+});
+export type GetMempoolMessageType = Static<typeof GetMempoolMessage>;
 
 export const MempoolMessage = Record({
-  type: Literal('mempool')
+  type: Literal('mempool'),
   /* TODO: finish this type */
-})
-export type MempoolMessageType = Static<typeof MempoolMessage>
+});
+export type MempoolMessageType = Static<typeof MempoolMessage>;
 
 export const ErrorCode = Union(
   Literal('INVALID_FORMAT'),
   Literal('INVALID_HANDSHAKE'),
-  Literal('UNKNOWN_OBJECT')
-) // TODO: Add rest of the error codes
-export type ErrorCodeType = Static<typeof ErrorCode>
+  Literal('UNKNOWN_OBJECT'),
+); // TODO: Add rest of the error codes
+export type ErrorCodeType = Static<typeof ErrorCode>;
 
 export const ErrorMessage = Record({
   type: Literal('error'),
   name: ErrorCode,
-  msg: String
-})
-export type ErrorMessageType = Static<typeof ErrorMessage>
+  msg: String,
+});
+export type ErrorMessageType = Static<typeof ErrorMessage>;
 
 export const Messages = [
   HelloMessage,
-  GetPeersMessage, PeersMessage,
-  IHaveObjectMessage, GetObjectMessage, ObjectMessage,
-  GetChainTipMessage, ChainTipMessage,
-  GetMempoolMessage, MempoolMessage,
-  ErrorMessage
-]
+  GetPeersMessage,
+  PeersMessage,
+  IHaveObjectMessage,
+  GetObjectMessage,
+  ObjectMessage,
+  GetChainTipMessage,
+  ChainTipMessage,
+  GetMempoolMessage,
+  MempoolMessage,
+  ErrorMessage,
+];
 export const Message = Union(
   HelloMessage,
-  GetPeersMessage, PeersMessage,
-  IHaveObjectMessage, GetObjectMessage, ObjectMessage,
-  GetChainTipMessage, ChainTipMessage,
-  GetMempoolMessage, MempoolMessage,
-  ErrorMessage
-)
-export type MessageType = Static<typeof Message>
+  GetPeersMessage,
+  PeersMessage,
+  IHaveObjectMessage,
+  GetObjectMessage,
+  ObjectMessage,
+  GetChainTipMessage,
+  ChainTipMessage,
+  GetMempoolMessage,
+  MempoolMessage,
+  ErrorMessage,
+);
+export type MessageType = Static<typeof Message>;

@@ -1,13 +1,15 @@
-import { ObjectId, objectManager } from './object'
-import { TransactionInputObjectType,
-         TransactionObjectType,
-         TransactionOutputObjectType,
-         OutpointObjectType,
-         SpendingTransactionObject } from './message'
-import { PublicKey, Signature } from './crypto/signature'
-import { ver } from './crypto/signature'
-import { logger } from './logger'
-import { Block } from './block'
+import { ObjectId, objectManager } from './object';
+import {
+  TransactionInputObjectType,
+  TransactionObjectType,
+  TransactionOutputObjectType,
+  OutpointObjectType,
+  SpendingTransactionObject,
+} from './message';
+import { PublicKey, Signature } from './crypto/signature';
+import { ver } from './crypto/signature';
+import { logger } from './logger';
+import { Block } from './block';
 
 /**
  * a class to represent a transaction output
@@ -27,8 +29,8 @@ export class Output {
 
   toNetworkObject(): TransactionOutputObjectType {
     return {
-      'pubkey': '0000000000000000000000000000000000000000000000000000000000000000',
-      'value':0
+      pubkey: '0000000000000000000000000000000000000000000000000000000000000000',
+      value: 0,
     }; /* TODO */
   }
 }
@@ -54,8 +56,8 @@ export class Outpoint {
   toNetworkObject(): OutpointObjectType {
     /* TODO */
     return {
-      'txid': '0000000000000000000000000000000000000000000000000000000000000000',
-      'index':0
+      txid: '0000000000000000000000000000000000000000000000000000000000000000',
+      index: 0,
     };
   }
 
@@ -78,12 +80,12 @@ export class Input {
   toNetworkObject(): TransactionInputObjectType {
     /* TODO */
     return {
-      'outpoint': {
-        'txid': '0000000000000000000000000000000000000000000000000000000000000000',
-        'index':0
+      outpoint: {
+        txid: '0000000000000000000000000000000000000000000000000000000000000000',
+        index: 0,
       },
-      'sig': '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
-    }
+      sig: '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+    };
   }
 
   /**

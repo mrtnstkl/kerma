@@ -1,10 +1,10 @@
-import { Block } from './block'
-import { logger } from './logger'
-import { OutpointObject, OutpointObjectType } from './message'
-import { db, ObjectId } from './object'
-import { Outpoint, Transaction } from './transaction'
+import { Block } from './block';
+import { logger } from './logger';
+import { OutpointObject, OutpointObjectType } from './message';
+import { db, ObjectId } from './object';
+import { Outpoint, Transaction } from './transaction';
 
-export type UTXO = Set<string>
+export type UTXO = Set<string>;
 
 /**
  * a class to represent the UTXO (unspent transaction output) set
@@ -21,7 +21,7 @@ export class UTXOSet {
 
   /**
    * Applies the transaction on the current utxo set, throwing an error if this is not possible
-   * @param tx 
+   * @param tx
    * @throws Error
    */
   async apply(tx: Transaction) {
@@ -35,7 +35,7 @@ export class UTXOSet {
   async applyMultiple(txs: Transaction[]) {
     /* TODO */
   }
-  
+
   toString() {
     /* TODO */
   }

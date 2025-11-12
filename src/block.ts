@@ -1,33 +1,32 @@
-import { BlockObject, BlockObjectType,
-         TransactionObject, ObjectType } from './message'
-import { hash } from './crypto/hash'
-import { Peer } from './peer'
-import { objectManager, ObjectId, db } from './object'
-import { UTXOSet } from './utxo'
-import { logger } from './logger'
-import { Transaction } from './transaction'
-import { chainManager } from './chain'
-import { Deferred } from './promise'
+import { BlockObject, BlockObjectType, TransactionObject, ObjectType } from './message';
+import { hash } from './crypto/hash';
+import { Peer } from './peer';
+import { objectManager, ObjectId, db } from './object';
+import { UTXOSet } from './utxo';
+import { logger } from './logger';
+import { Transaction } from './transaction';
+import { chainManager } from './chain';
+import { Deferred } from './promise';
 
-const TARGET = '0000abc000000000000000000000000000000000000000000000000000000000' /* TODO */
+const TARGET = '0000abc000000000000000000000000000000000000000000000000000000000'; /* TODO */
 const GENESIS: BlockObjectType = {
-  "T":"0000abc000000000000000000000000000000000000000000000000000000000",
-  "created":1671062400,
-  "miner":"Marabu",
-  "nonce":"00000000000000000000000000000000000000000000000000000000005bb0f2",
-  "note":"The New York Times 2022-12-13: Scientists Achieve Nuclear Fusion Breakthrough With Blast of 192 Lasers",
-  "previd": null,
-  "txids":[],
-  "type":"block"
-} 
-const BU = 10**12
-const BLOCK_REWARD = 50 * BU
+  T: '0000abc000000000000000000000000000000000000000000000000000000000',
+  created: 1671062400,
+  miner: 'Marabu',
+  nonce: '00000000000000000000000000000000000000000000000000000000005bb0f2',
+  note: 'The New York Times 2022-12-13: Scientists Achieve Nuclear Fusion Breakthrough With Blast of 192 Lasers',
+  previd: null,
+  txids: [],
+  type: 'block',
+};
+const BU = 10 ** 12;
+const BLOCK_REWARD = 50 * BU;
 
 export class BlockManager {
   /* TODO */
 }
 
-export const blockManager = new BlockManager()
+export const blockManager = new BlockManager();
 
 /**
  * Class used to represent a block
@@ -46,7 +45,7 @@ export class Block {
 
   /**
    * Builds a block object from given BlockObject collection
-   * @param object 
+   * @param object
    * @returns a Block object representing this block
    */
   public static async fromNetworkObject(object: BlockObjectType): Promise<Block> {
@@ -54,9 +53,7 @@ export class Block {
     return new Block();
   }
 
-  constructor(
-    /* TODO */
-  ) {
+  constructor /* TODO */() {
     /* TODO */
   }
 

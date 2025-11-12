@@ -1,34 +1,36 @@
-export type ObjectId = string
+export type ObjectId = string;
 
-import level from 'level-ts'
+import level from 'level-ts';
 import {
-  Object, ObjectType,
+  Object,
+  ObjectType,
   TransactionObject,
   ErrorMessage,
   ErrorMessageType,
   CoinbaseTransactionObject,
-  BlockObject
-} from './message'
-import { Transaction } from './transaction'
-import { Block } from './block'
-import { logger } from './logger'
-import { hash } from './crypto/hash'
-import { Peer } from './peer'
-import { Deferred, delay, resolveToReject } from './promise'
-import { mempool } from './mempool'
-import { Literal, match, Record, Static, Union, when } from 'runtypes'
+  BlockObject,
+} from './message';
+import { Transaction } from './transaction';
+import { Block } from './block';
+import { logger } from './logger';
+import { hash } from './crypto/hash';
+import { Peer } from './peer';
+import { Deferred, delay, resolveToReject } from './promise';
+import { mempool } from './mempool';
+import { Literal, match, Record, Static, Union, when } from 'runtypes';
 
 const envDatabaseDirectory = process.env.OBJECT_DATABASE_DIRECTORY;
-const databaseDirectory = (envDatabaseDirectory !== undefined && envDatabaseDirectory !== '') ? envDatabaseDirectory : './db'
+const databaseDirectory =
+  envDatabaseDirectory !== undefined && envDatabaseDirectory !== '' ? envDatabaseDirectory : './db';
 
-export const db = new level(databaseDirectory)
-const OBJECT_AVAILABILITY_TIMEOUT = 5000 // ms
+export const db = new level(databaseDirectory);
+const OBJECT_AVAILABILITY_TIMEOUT = 5000; // ms
 
 export const ValidationResult = Union(
   Record({ success: Literal(true) }),
-  Record({ success: Literal(false), error: ErrorMessage })
-)
-export type ValidationResultType = Static<typeof ValidationResult>
+  Record({ success: Literal(false), error: ErrorMessage }),
+);
+export type ValidationResultType = Static<typeof ValidationResult>;
 
 /**
  * Interfaces the database
@@ -40,10 +42,10 @@ class ObjectManager {
    * Clears all objects from the database
    */
   async clear() {
-    logger.info(`Clearing all objects from database`)
-    const objects = await db.stream({ all: 'object:' })
+    logger.info(`Clearing all objects from database`);
+    const objects = await db.stream({ all: 'object:' });
     for (const { key, value } of objects) {
-      await db.del(key)
+      await db.del(key);
     }
   }
 
@@ -52,19 +54,19 @@ class ObjectManager {
    * @returns map of objectid -> object
    */
   async dump() {
-    const result = new Map<ObjectId, ObjectType>()
-    const objects = await db.stream({ all: 'object:' })
+    const result = new Map<ObjectId, ObjectType>();
+    const objects = await db.stream({ all: 'object:' });
     for (let { key, value } of objects) {
-      key = key.slice('object:'.length)
+      key = key.slice('object:'.length);
       try {
-        value = Object.check(value)
+        value = Object.check(value);
       } catch (error) {
-        logger.warn(`Invalid object in database with ID ${key}: %o`, error)
-        continue
+        logger.warn(`Invalid object in database with ID ${key}: %o`, error);
+        continue;
       }
-      result.set(key, value)
+      result.set(key, value);
     }
-    return result
+    return result;
   }
 
   /**
@@ -75,82 +77,80 @@ class ObjectManager {
   toCanonicalString(obj: any): string {
     if (Array.isArray(obj)) {
       // arrays
-      const arrItems = obj.map(item => this.toCanonicalString(item))
-      return '[' + arrItems.join(',') + ']'
+      const arrItems = obj.map((item) => this.toCanonicalString(item));
+      return '[' + arrItems.join(',') + ']';
     }
     if (typeof obj === 'object' && obj !== null) {
       // objects
-      const keys = globalThis.Object.keys(obj).sort()
-      const keyValuePairs = keys.map(key => `"${key}":${this.toCanonicalString(obj[key])}`)
-      return '{' + keyValuePairs.join(',') + '}'
+      const keys = globalThis.Object.keys(obj).sort();
+      const keyValuePairs = keys.map((key) => `"${key}":${this.toCanonicalString(obj[key])}`);
+      return '{' + keyValuePairs.join(',') + '}';
     }
     // primitives
-    return JSON.stringify(obj)
+    return JSON.stringify(obj);
   }
 
   id(obj: any) {
-    const serialized = this.toCanonicalString(obj)
-    return hash(serialized)
+    const serialized = this.toCanonicalString(obj);
+    return hash(serialized);
   }
 
   /**
    * Checks if you know about this object
-   * @param objectid 
+   * @param objectid
    */
   async exists(objectid: ObjectId) {
-    return await db.exists('object:' + objectid)
+    return await db.exists('object:' + objectid);
   }
 
   async get(objectid: ObjectId): Promise<ObjectType> {
-    return await db.get('object:' + objectid)
+    return await db.get('object:' + objectid);
   }
 
   async del(objectid: ObjectId) {
-    logger.info(`Deleting object ${objectid} from database`)
-    return await db.del('object:' + objectid)
+    logger.info(`Deleting object ${objectid} from database`);
+    return await db.del('object:' + objectid);
   }
 
   async put(object: ObjectType) {
-    const objectid = this.id(object)
-    logger.info(`Storing object ${objectid} in database`)
-    await db.put('object:' + objectid, object)
-    return objectid
+    const objectid = this.id(object);
+    logger.info(`Storing object ${objectid} in database`);
+    await db.put('object:' + objectid, object);
+    return objectid;
   }
 
   async validate(object: ObjectType, peer: Peer): Promise<ValidationResultType> {
-    const ok: ValidationResultType = { success: true }
+    const ok: ValidationResultType = { success: true };
     return await match(
-
-      when(TransactionObject, async obj => {
+      when(TransactionObject, async (obj) => {
         // check if all objects referenced by inputs are known
         for (const input of obj.inputs) {
-          if (!await this.exists(input.outpoint.txid)) {
+          if (!(await this.exists(input.outpoint.txid))) {
             const error: ErrorMessageType = {
               type: 'error',
               msg: `Referenced txid not found: ${input.outpoint.txid}`,
-              name: 'UNKNOWN_OBJECT'
-            }
-            return { success: false, error }
+              name: 'UNKNOWN_OBJECT',
+            };
+            return { success: false, error };
           }
         }
-        return ok
+        return ok;
       }),
 
-      when(CoinbaseTransactionObject, async obj => {
-        return ok
+      when(CoinbaseTransactionObject, async (obj) => {
+        return ok;
       }),
 
-      when(BlockObject, async obj => {
+      when(BlockObject, async (obj) => {
         // todo: for assignment 2, only transaction objects are valid
         const error: ErrorMessageType = {
           type: 'error',
           msg: 'Invalid object received',
-          name: 'INVALID_FORMAT'
-        }
-        return { success: false, error }
-      })
-
-    )(object)
+          name: 'INVALID_FORMAT',
+        };
+        return { success: false, error };
+      }),
+    )(object);
   }
 
   /**
@@ -159,10 +159,11 @@ class ObjectManager {
    * @param peer the peer you want to get the object from
    * @returns the object, or rejects if not possible
    */
-  async retrieve(objectid: ObjectId, peer: Peer): Promise<Boolean> { // todo: Promise<ObjectType>
+  async retrieve(objectid: ObjectId, peer: Peer): Promise<Boolean> {
+    // todo: Promise<ObjectType>
     /* TODO */
-    return true
+    return true;
   }
 }
 
-export const objectManager = new ObjectManager()
+export const objectManager = new ObjectManager();

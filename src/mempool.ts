@@ -1,9 +1,9 @@
-import { Block } from './block'
-import { Chain } from './chain'
-import { logger } from './logger'
-import { db, ObjectId, objectManager } from './object'
-import { Transaction } from './transaction'
-import { UTXOSet } from './utxo'
+import { Block } from './block';
+import { Chain } from './chain';
+import { logger } from './logger';
+import { db, ObjectId, objectManager } from './object';
+import { Transaction } from './transaction';
+import { UTXOSet } from './utxo';
 
 /**
  * Handles the state of the Mining Pool
@@ -12,8 +12,8 @@ class MemPool {
   /* TODO */
 
   async init() {
-    await this.load()
-    logger.debug('Mempool initialized')
+    await this.load();
+    logger.debug('Mempool initialized');
   }
 
   /**
@@ -21,13 +21,13 @@ class MemPool {
    */
   getTxIds(): ObjectId[] {
     /* TODO */
-    const x : ObjectId[] = [];
+    const x: ObjectId[] = [];
     return x;
   }
 
   /**
    * Creates a mempool from transaction IDs
-   * @param txids 
+   * @param txids
    */
   async fromTxIds(txids: ObjectId[]) {
     /* TODO */
@@ -37,7 +37,7 @@ class MemPool {
    * save this mempool state
    */
   async save() {
-   /* TODO */
+    /* TODO */
   }
 
   /**
@@ -49,7 +49,7 @@ class MemPool {
 
   /**
    * on arrival of a new transaction, update the mempool if possible
-   * @param tx 
+   * @param tx
    * @returns true iff tx has been successfully added to the mempool
    */
   async onTransactionArrival(tx: Transaction): Promise<boolean> {
@@ -59,13 +59,13 @@ class MemPool {
 
   /**
    * reorganises the mempool on blockchain fork
-   * @param lca 
-   * @param shortFork 
-   * @param longFork 
+   * @param lca
+   * @param shortFork
+   * @param longFork
    */
   async reorg(lca: Block, shortFork: Chain, longFork: Chain) {
     /* TODO */
   }
 }
 
-export const mempool = new MemPool()
+export const mempool = new MemPool();

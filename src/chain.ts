@@ -1,7 +1,7 @@
-import { Block } from "./block";
-import { logger } from "./logger";
-import { mempool } from "./mempool";
-import { db } from "./object";
+import { Block } from './block';
+import { logger } from './logger';
+import { mempool } from './mempool';
+import { db } from './object';
 
 /**
  * Handles the blockchain state
@@ -42,8 +42,8 @@ export class Chain {
     const shortFork = new Block();
     const longFork = new Block();
 
-    return [lca, shortFork, longFork]
+    return [lca, shortFork, longFork];
   }
 }
 
-export const chainManager = new ChainManager()
+export const chainManager = new ChainManager();
