@@ -8,5 +8,5 @@ export type Signature = string;
  * @param pubkey the public key under which the signature should be verified
  */
 export async function ver(sig: Signature, message: string, pubkey: PublicKey) {
-    /* TODO */
+  /* TODO */
 }

@@ -9,63 +9,63 @@ import { UTXOSet } from './utxo';
  * Handles the state of the Mining Pool
  */
 class MemPool {
+  /* TODO */
+
+  async init() {
+    await this.load();
+    logger.debug('Mempool initialized');
+  }
+
+  /**
+   * @returns all IDs from the transactions in the mempool
+   */
+  getTxIds(): ObjectId[] {
     /* TODO */
+    const x: ObjectId[] = [];
+    return x;
+  }
 
-    async init() {
-        await this.load();
-        logger.debug('Mempool initialized');
-    }
+  /**
+   * Creates a mempool from transaction IDs
+   * @param txids
+   */
+  async fromTxIds(txids: ObjectId[]) {
+    /* TODO */
+  }
 
-    /**
-     * @returns all IDs from the transactions in the mempool
-     */
-    getTxIds(): ObjectId[] {
-        /* TODO */
-        const x: ObjectId[] = [];
-        return x;
-    }
+  /**
+   * save this mempool state
+   */
+  async save() {
+    /* TODO */
+  }
 
-    /**
-     * Creates a mempool from transaction IDs
-     * @param txids
-     */
-    async fromTxIds(txids: ObjectId[]) {
-        /* TODO */
-    }
+  /**
+   * load mempool state
+   */
+  async load() {
+    /* TODO */
+  }
 
-    /**
-     * save this mempool state
-     */
-    async save() {
-        /* TODO */
-    }
+  /**
+   * on arrival of a new transaction, update the mempool if possible
+   * @param tx
+   * @returns true iff tx has been successfully added to the mempool
+   */
+  async onTransactionArrival(tx: Transaction): Promise<boolean> {
+    /* TODO */
+    return false;
+  }
 
-    /**
-     * load mempool state
-     */
-    async load() {
-        /* TODO */
-    }
-
-    /**
-     * on arrival of a new transaction, update the mempool if possible
-     * @param tx
-     * @returns true iff tx has been successfully added to the mempool
-     */
-    async onTransactionArrival(tx: Transaction): Promise<boolean> {
-        /* TODO */
-        return false;
-    }
-
-    /**
-     * reorganises the mempool on blockchain fork
-     * @param lca
-     * @param shortFork
-     * @param longFork
-     */
-    async reorg(lca: Block, shortFork: Chain, longFork: Chain) {
-        /* TODO */
-    }
+  /**
+   * reorganises the mempool on blockchain fork
+   * @param lca
+   * @param shortFork
+   * @param longFork
+   */
+  async reorg(lca: Block, shortFork: Chain, longFork: Chain) {
+    /* TODO */
+  }
 }
 
 export const mempool = new MemPool();

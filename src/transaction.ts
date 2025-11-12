@@ -1,10 +1,10 @@
 import { ObjectId, objectManager } from './object';
 import {
-    TransactionInputObjectType,
-    TransactionObjectType,
-    TransactionOutputObjectType,
-    OutpointObjectType,
-    SpendingTransactionObject,
+  TransactionInputObjectType,
+  TransactionObjectType,
+  TransactionOutputObjectType,
+  OutpointObjectType,
+  SpendingTransactionObject,
 } from './message';
 import { PublicKey, Signature } from './crypto/signature';
 import { ver } from './crypto/signature';
@@ -15,25 +15,24 @@ import { Block } from './block';
  * a class to represent a transaction output
  */
 export class Output {
-    readonly pubkey: string;
-    readonly value: number;
+  /* TODO */
 
-    static fromNetworkObject(outputMsg: TransactionOutputObjectType): Output {
-        const output = new Output(outputMsg.pubkey, outputMsg.value);
-        return output;
-    }
+  static fromNetworkObject(outputMsg: TransactionOutputObjectType): Output {
+    /* TODO */
+    const output = new Output('', 0);
+    return output;
+  }
 
-    constructor(pubkey: PublicKey, value: number) {
-        this.pubkey = pubkey;
-        this.value = value;
-    }
+  constructor(pubkey: PublicKey, value: number) {
+    /* TODO */
+  }
 
-    toNetworkObject(): TransactionOutputObjectType {
-        return {
-            pubkey: this.pubkey,
-            value: this.value,
-        };
-    }
+  toNetworkObject(): TransactionOutputObjectType {
+    return {
+      pubkey: '0000000000000000000000000000000000000000000000000000000000000000',
+      value: 0,
+    }; /* TODO */
+  }
 }
 
 /**

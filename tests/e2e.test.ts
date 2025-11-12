@@ -13,125 +13,125 @@ let processes: Array<ChildProcess> = [];
 let temporaryDirectories: Array<string> = [];
 
 class SocketWithBuffers {
-    socket: MessageSocket;
-    receivedMessages: Array<string> = [];
-    receivedError: Boolean = false;
+  socket: MessageSocket;
+  receivedMessages: Array<string> = [];
+  receivedError: Boolean = false;
 
-    static async create(host: string = DEFAULT_HOST) {
-        const socket = await MessageSocket.createClient(host);
-        return new SocketWithBuffers(socket);
-    }
+  static async create(host: string = DEFAULT_HOST) {
+    const socket = await MessageSocket.createClient(host);
+    return new SocketWithBuffers(socket);
+  }
 
-    constructor(socket: MessageSocket) {
-        this.socket = socket;
+  constructor(socket: MessageSocket) {
+    this.socket = socket;
 
-        this.socket.on('message', (message: string) => {
-            this.receivedMessages.push(message);
-        });
+    this.socket.on('message', (message: string) => {
+      this.receivedMessages.push(message);
+    });
 
-        this.socket.on('error', () => {
-            this.receivedError = true;
-        });
-    }
+    this.socket.on('error', () => {
+      this.receivedError = true;
+    });
+  }
 
-    sendMessage(message: string) {
-        this.socket.sendMessage(message);
-    }
+  sendMessage(message: string) {
+    this.socket.sendMessage(message);
+  }
 
-    close() {
-        this.socket.end();
-    }
+  close() {
+    this.socket.end();
+  }
 
-    /*
-     * Check if receivedMessages array contains an error message. If error name
-     * is specified, it will only consider error messages with this name.
-     */
-    receivedErrorMessage(name?: string) {
-        for (const message of this.receivedMessages) {
-            try {
-                const parsedMessage = JSON.parse(message);
+  /*
+   * Check if receivedMessages array contains an error message. If error name
+   * is specified, it will only consider error messages with this name.
+   */
+  receivedErrorMessage(name?: string) {
+    for (const message of this.receivedMessages) {
+      try {
+        const parsedMessage = JSON.parse(message);
 
-                if (
-                    parsedMessage['type'] === 'error' &&
-                    (name === undefined || parsedMessage['name'] === name)
-                ) {
-                    return true;
-                }
-            } catch {}
+        if (
+          parsedMessage['type'] === 'error' &&
+          (name === undefined || parsedMessage['name'] === name)
+        ) {
+          return true;
         }
-
-        return false;
+      } catch {}
     }
+
+    return false;
+  }
 }
 
 const startNode = () => {
-    const databaseDirectory = fs.mkdtempSync(path.join(tmpBase, 'kerma-'));
+  const databaseDirectory = fs.mkdtempSync(path.join(tmpBase, 'kerma-'));
 
-    const proc = spawn('npm', ['run', 'start'], {
-        env: { ...process.env, OBJECT_DATABASE_DIRECTORY: databaseDirectory },
-        stdio: 'inherit',
-    });
+  const proc = spawn('npm', ['run', 'start'], {
+    env: { ...process.env, OBJECT_DATABASE_DIRECTORY: databaseDirectory },
+    stdio: 'inherit',
+  });
 
-    processes.push(proc);
-    temporaryDirectories.push(databaseDirectory);
+  processes.push(proc);
+  temporaryDirectories.push(databaseDirectory);
 };
 
 beforeAll(async () => {
-    startNode();
+  startNode();
 
-    await new Promise((res) => setTimeout(res, 3000));
+  await new Promise((res) => setTimeout(res, 3000));
 });
 
 afterAll(() => {
-    // Kill all spawned processes
-    processes.forEach((proc) => {
-        proc.kill('SIGTERM');
-    });
-    processes = [];
+  // Kill all spawned processes
+  processes.forEach((proc) => {
+    proc.kill('SIGTERM');
+  });
+  processes = [];
 
-    // Clean up temporary directories
-    temporaryDirectories.forEach((dir) => {
-        if (fs.existsSync(dir)) {
-            fs.rmSync(dir, { recursive: true, force: true });
-        }
-    });
-    temporaryDirectories = [];
+  // Clean up temporary directories
+  temporaryDirectories.forEach((dir) => {
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  temporaryDirectories = [];
 });
 
 test('connects and sends initial messages', async () => {
-    const peer = await SocketWithBuffers.create();
+  const peer = await SocketWithBuffers.create();
 
-    await new Promise((res) => setTimeout(res, 1000));
+  await new Promise((res) => setTimeout(res, 1000));
 
-    expect(peer.receivedError).toBe(false);
-    expect(peer.receivedMessages).toContain('{"type":"hello","version":"0.10.0","agent":"b0b3r"}');
-    expect(peer.receivedMessages).toContain('{"type":"getpeers"}');
+  expect(peer.receivedError).toBe(false);
+  expect(peer.receivedMessages).toContain('{"type":"hello","version":"0.10.0","agent":"b0b3r"}');
+  expect(peer.receivedMessages).toContain('{"type":"getpeers"}');
 
-    peer.close();
+  peer.close();
 });
 
 test('fails on invalid hello message', async () => {
-    const invalidMessagees = [
-        '{"type":"hello","version":"brah","agent":"test"}',
-        '{"type":"hello","agent":"test"}',
-        '{"type":"hello"}',
-    ];
+  const invalidMessagees = [
+    '{"type":"hello","version":"brah","agent":"test"}',
+    '{"type":"hello","agent":"test"}',
+    '{"type":"hello"}',
+  ];
 
-    for (const message of invalidMessagees) {
-        const peer = await SocketWithBuffers.create();
+  for (const message of invalidMessagees) {
+    const peer = await SocketWithBuffers.create();
 
-        peer.sendMessage(message);
+    peer.sendMessage(message);
 
-        await new Promise((res) => setTimeout(res, 1000));
+    await new Promise((res) => setTimeout(res, 1000));
 
-        expect(peer.receivedErrorMessage('INVALID_HANDSHAKE')).toBeTruthy();
-    }
+    expect(peer.receivedErrorMessage('INVALID_HANDSHAKE')).toBeTruthy();
+  }
 });
 
 test('fails on no hello message', async () => {
-    const peer = await SocketWithBuffers.create();
+  const peer = await SocketWithBuffers.create();
 
-    await new Promise((res) => setTimeout(res, 21000)); // Wait for over 20 seconds
+  await new Promise((res) => setTimeout(res, 21000)); // Wait for over 20 seconds
 
-    expect(peer.receivedErrorMessage('INVALID_HANDSHAKE')).toBeTruthy();
+  expect(peer.receivedErrorMessage('INVALID_HANDSHAKE')).toBeTruthy();
 }, 25000);
