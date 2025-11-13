@@ -298,12 +298,11 @@ export class Peer {
 
     // we dont, so validate and store it
     const validation = await Transaction.validate(msg.object);
-    //const validation = await objectManager.validate(msg.object, this);
 
     if (validation.success) {
       this.info(`Received new object from peer`);
       const objectId = await objectManager.put(msg.object);
-      // gissip to other peers
+      // gossip to other peers
       network.broadcast(objectId);
     } else {
       this.debug(`Received object is invalid: ${validation.error.msg}`);

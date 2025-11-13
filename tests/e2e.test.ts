@@ -70,6 +70,7 @@ const startNode = () => {
   const proc = spawn('npm', ['run', 'start'], {
     env: { ...process.env, OBJECT_DATABASE_DIRECTORY: databaseDirectory },
     stdio: 'inherit',
+    shell: true,
   });
 
   processes.push(proc);

@@ -1,4 +1,4 @@
-import { ed25519 } from '@noble/curves/ed25519';
+import  ed25519  from '@noble/ed25519';
 
 export type PublicKey = string;
 export type Signature = string;
