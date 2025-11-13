@@ -1,4 +1,4 @@
-import { ObjectId, objectManager } from './object';
+import { ObjectId, objectManager, ValidationResultType } from './object';
 import {
   TransactionInputObjectType,
   TransactionObjectType,
@@ -9,11 +9,16 @@ import {
   GeneralTransactionObjectType,
   TransactionObject,
   CoinbaseTransactionObject,
+  ObjectType,
+  ErrorMessageType,
+  BlockObject,
 } from './message';
 import { isValidPublicKey, PublicKey, Signature } from './crypto/signature';
 import { ver } from './crypto/signature';
 import { logger } from './logger';
 import { Block } from './block';
+import { Peer } from '@src/peer';
+import { match, when } from 'runtypes';
 
 /**
  * a class to represent a transaction output
@@ -164,76 +169,139 @@ export class Transaction {
     return (!this.inputs || this.inputs.length === 0) && this.height != undefined;
   }
 
-  async validate(idx?: number, block?: Block) {
-    //TODO block level validation in the next task
-    //(i guess not part of this task as i read:))
-    if (this.isCoinbase()) {
-      await this.validateCoinbase();
-    } else {
-      await this.validateNonCoinbase();
-    }
-  }
+  static async validate (object: ObjectType): Promise<ValidationResultType> {
+    const ok: ValidationResultType = { success: true };
+    return await match(
+      when(TransactionObject, async (obj) => {
+          // We're checking a regular tx, so it must have inputs
+          if (!obj.inputs || obj.inputs.length === 0) {
+              const error: ErrorMessageType = {
+                  type: 'error',
+                  msg: 'Inputs are missing.',
+                  name: 'INVALID_FORMAT',
+              };
+              return {success: false, error};
+          }
 
-  private validateOutputs(): number {
-    let totalOutputValue = 0;
-    for (const output of this.outputs) {
-      if (!isValidPublicKey(output.pubkey)) {
-        throw new Error(`Invalid output: bad public key format ${output.pubkey}`);
-      }
-      if (!Number.isInteger(output.value) || output.value < 0) {
-        throw new Error(`Invalid output: value must be a non-negative integer.`);
-      }
-      totalOutputValue += output.value;
-    }
-    return totalOutputValue;
-  }
+          let totalInputValue = 0;
+          let totalOutputValue = 0;
 
-  async validateCoinbase(): Promise<void> {
-    //Assumption in the assignment that syntactically correct
-    //coinbase transactions are always valid
-    this.validateOutputs();
-  }
+          // --- Step 2c: Validate Outputs ---
+          for (const output of obj.outputs) {
+              if (!isValidPublicKey(output.pubkey)) {
+                  const error: ErrorMessageType = {
+                      type: 'error',
+                      msg: `Invalid output: bad public key format ${output.pubkey}`,
+                      name: 'INVALID_FORMAT'
+                  };
+                  return {success:false, error};
+              }
+              if (!Number.isInteger(output.value) || output.value < 0) {
+                  const error: ErrorMessageType = {
+                      type: 'error',
+                      msg: `Invalid output: value must be a non-negative integer.`,
+                      name: 'INVALID_FORMAT'
+                  };
+                  return {success:false, error};
+              }
+              totalOutputValue += output.value;
+          }
 
-  private async validateNonCoinbase(): Promise<void> {
-    if (!this.inputs) {
-      throw new Error('Invalid Non-Coinbase-Transaction: Inputs are missing.');
-    }
+          // --- Step 2b: Verify Signature (Preparation) ---
+          // We must re-create the Transaction class to call its 'toNetworkObject(false)'
+          // This is complex, but it's what's required if we do validation here.
+          const txInstance = Transaction.fromNetworkObject(obj);
+          const unsignedTxObject = txInstance.toNetworkObject(false);
+          const canonicalString = objectManager.toCanonicalString(unsignedTxObject);
 
-    let totalInputValue = 0;
+          for (const input of obj.inputs) {
+              if (!(await objectManager.exists(input.outpoint.txid))) {
+                  const error: ErrorMessageType = {
+                      type: 'error',
+                      msg: `Referenced txid not found: ${input.outpoint.txid}`,
+                      name: 'UNKNOWN_OBJECT',
+                  };
+                  return { success: false, error };
+              } else {
+                  let referencedTx: ObjectType = await objectManager.get(input.outpoint.txid);
+                  const referencedOutput = (referencedTx as TransactionObjectType).outputs[input.outpoint.index];
+                  if(!referencedOutput){
+                      const error: ErrorMessageType = {
+                          type: 'error',
+                          msg: `Invalid outpoint: Index ${input.outpoint.index} is out of bounds for tx ${input.outpoint.txid}.`,
+                          name: 'INVALID_FORMAT',
+                      };
+                      return { success: false, error };
+                  }
+                  totalInputValue += referencedOutput.value;
+                  // --- Step 2b: Verify Signature ---
+                  const { sig } = input;
+                  const { pubkey } = referencedOutput;
 
-    // --- Step 2c: Validate Outputs ---
-    // First, check all outputs and sum their value.
-    const totalOutputValue = this.validateOutputs();
+                  if (!sig || sig === '') {
+                      const error: ErrorMessageType = {
+                          type: 'error',
+                          msg: `Input signature is missing for ${input.outpoint.txid}:${input.outpoint.index}`,
+                          name: 'INVALID_FORMAT',
+                      };
+                      return { success: false, error };
+                  }
+                  if (!(await ver(canonicalString, sig, pubkey))) {
+                      const error: ErrorMessageType = {
+                          type: 'error',
+                          msg: `Invalid signature for input ${input.outpoint.txid}:${input.outpoint.index}`,
+                          name: 'INVALID_FORMAT',
+                      };
+                      return { success: false, error };
+                  }
+              }
 
-    const unsignedTxObject = this.toNetworkObject(false);
+              // --- Step 2d: Weak Law of Conservation ---
+              if (totalInputValue < totalOutputValue) {
+                  const error: ErrorMessageType = {
+                      type: 'error',
+                      msg: `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
+                      name: 'INVALID_FORMAT',
+                  };
+                  return { success: false, error };
+              }
+          }
+        return ok;
+      }),
 
-    const canonicalStringTxHash = objectManager.toCanonicalString(unsignedTxObject);
+      when(CoinbaseTransactionObject, async (obj) => {
+        for (const output of obj.outputs) {
+          if (!isValidPublicKey(output.pubkey)) {
+            const error: ErrorMessageType = {
+              type: 'error',
+              msg: `Invalid output: bad public key format ${output.pubkey}`,
+              name: 'INVALID_FORMAT',
+            };
+            return { success: false, error };
+          }
+          if (!Number.isInteger(output.value) || output.value < 0) {
+            // This is the check your test is looking for
+            const error: ErrorMessageType = {
+              type: 'error',
+              msg: `Invalid output: value must be a non-negative integer.`,
+              name: 'INVALID_FORMAT',
+            };
+            return { success: false, error };
+          }
+        }
+        return ok;
+      }),
 
-    // --- Loop for Steps 2a & 2b ---
-    for (const input of this.inputs) {
-      const referencedOutput = await input.outpoint.resolve();
-
-      totalInputValue += referencedOutput.value;
-      const pubkey = referencedOutput.pubkey;
-      const signature = input.sig;
-
-      if (!signature || signature == '') {
-        throw new Error(`Input signature is null or undefined for ${input.outpoint.toString()}`);
-      }
-
-      const isSignatureValid = await ver(canonicalStringTxHash, signature, pubkey);
-
-      if (!isSignatureValid) {
-        throw new Error(`Invalid signature for input ${input.outpoint.toString()}`);
-      }
-    }
-
-    // --- Weak Law of Conservation ---
-    if (totalInputValue < totalOutputValue) {
-      throw new Error(
-        `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
-      );
-    }
+      when(BlockObject, async (obj) => {
+        // todo: for assignment 2, only transaction objects are valid
+        const error: ErrorMessageType = {
+          type: 'error',
+          msg: 'Invalid object received',
+          name: 'INVALID_FORMAT',
+        };
+        return { success: false, error };
+      }),
+    )(object);
   }
 
   inputsUnsigned(): Input[] {

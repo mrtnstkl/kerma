@@ -119,7 +119,7 @@ class ObjectManager {
     return objectid;
   }
 
-  async validate(object: ObjectType, peer: Peer): Promise<ValidationResultType> {
+  /*async validate(object: ObjectType, peer: Peer): Promise<ValidationResultType> {
     const ok: ValidationResultType = { success: true };
     return await match(
       when(TransactionObject, async (obj) => {
@@ -151,7 +151,7 @@ class ObjectManager {
         return { success: false, error };
       }),
     )(object);
-  }
+  }*/
 
   /**
    * Attempts to retrieve an object from a peer

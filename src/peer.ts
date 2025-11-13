@@ -27,6 +27,7 @@ import {
   ErrorCodeType,
   GetMempoolMessage,
   MempoolMessage,
+  GeneralTransactionObjectType,
 } from './message';
 import { peerManager } from './peermanager';
 import { db, objectManager } from './object';
@@ -34,6 +35,7 @@ import { network } from './network';
 import { ObjectId } from './object';
 import { chainManager } from './chain';
 import { mempool } from './mempool';
+import { Transaction } from './transaction';
 
 const VERSION = '0.10.0';
 const NAME = 'b0b3r';
@@ -293,8 +295,11 @@ export class Peer {
       this.debug(`Received object is already known`);
       return;
     }
+
     // we dont, so validate and store it
-    const validation = await objectManager.validate(msg.object, this);
+    const validation = await Transaction.validate(msg.object);
+    //const validation = await objectManager.validate(msg.object, this);
+
     if (validation.success) {
       this.info(`Received new object from peer`);
       const objectId = await objectManager.put(msg.object);
