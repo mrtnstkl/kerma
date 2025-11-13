@@ -4,6 +4,7 @@ import { logger } from './logger';
 import { Peer } from './peer';
 import { EventEmitter } from 'events';
 import { peerManager } from './peermanager';
+import { ObjectId } from './object';
 
 class Network {
   peers: Set<Peer> = new Set();
@@ -58,10 +59,9 @@ class Network {
     }
   }
 
-  broadcast(obj: object) {
-    logger.info(`Broadcasting object to all peers: %o`, obj);
-
-    /* TODO */
+  broadcast(oid: ObjectId) {
+    logger.info(`Broadcasting object to ${this.peers.size} connected peers: ${oid}`);
+    this.peers.forEach(peer => peer.sendIHaveObject(oid));
   }
 }
 
