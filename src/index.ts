@@ -3,8 +3,8 @@ import { network } from './network';
 import { chainManager } from './chain';
 import { mempool } from './mempool';
 import { objectManager } from './object';
+import { BIND_PORT } from './env';
 
-const BIND_PORT = 18018;
 const BIND_IP = '0.0.0.0';
 
 async function main() {

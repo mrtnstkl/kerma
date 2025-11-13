@@ -9,8 +9,12 @@ const DEFAULT_HOST = 'localhost:18018';
 
 const tmpBase = os.tmpdir();
 
-let processes: Array<ChildProcess> = [];
-let temporaryDirectories: Array<string> = [];
+let globalNodes: Node[] = [];
+
+interface Node {
+  proc: ChildProcess;
+  temporaryDirectory: string;
+}
 
 class SocketWithBuffers {
   socket: MessageSocket;
@@ -64,38 +68,44 @@ class SocketWithBuffers {
   }
 }
 
-const startNode = () => {
+const startNode = (env?: object): Node => {
   const databaseDirectory = fs.mkdtempSync(path.join(tmpBase, 'kerma-'));
 
   const proc = spawn('npm', ['run', 'start'], {
-    env: { ...process.env, OBJECT_DATABASE_DIRECTORY: databaseDirectory },
+    env: {
+      ...process.env,
+      OBJECT_DATABASE_DIRECTORY: databaseDirectory,
+      AGENT_HOST_ADDRESS: 'localhost:18018',
+      ...env,
+    },
     stdio: 'inherit',
   });
 
-  processes.push(proc);
-  temporaryDirectories.push(databaseDirectory);
+  return {
+    proc,
+    temporaryDirectory: databaseDirectory,
+  };
+};
+
+const cleanupNode = (node: Node) => {
+  node.proc.kill('SIGTERM');
+
+  if (fs.existsSync(node.temporaryDirectory)) {
+    fs.rmSync(node.temporaryDirectory, { recursive: true, force: true });
+  }
 };
 
 beforeAll(async () => {
-  startNode();
+  const node = startNode();
+  globalNodes.push(node);
 
-  await new Promise((res) => setTimeout(res, 3000));
+  await new Promise((res) => setTimeout(res, 2000));
 });
 
 afterAll(() => {
-  // Kill all spawned processes
-  processes.forEach((proc) => {
-    proc.kill('SIGTERM');
-  });
-  processes = [];
-
-  // Clean up temporary directories
-  temporaryDirectories.forEach((dir) => {
-    if (fs.existsSync(dir)) {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
-  temporaryDirectories = [];
+  // Kill all global nodes
+  globalNodes.forEach(cleanupNode);
+  globalNodes = [];
 });
 
 test('connects and sends initial messages', async () => {
@@ -135,3 +145,43 @@ test('fails on no hello message', async () => {
 
   expect(peer.receivedErrorMessage('INVALID_HANDSHAKE')).toBeTruthy();
 }, 25000);
+
+test('nodes exchange known peers', async () => {
+  const node1 = startNode({
+    BIND_PORT: 18019,
+    AGENT_HOST_ADDRESS: 'localhost:18019',
+    BOOTSTRAP_PEERS: 'localhost:18020',
+  });
+
+  const node2 = startNode({
+    BIND_PORT: 18020,
+    AGENT_HOST_ADDRESS: 'localhost:18020',
+    BOOTSTRAP_PEERS: 'localhost:18019',
+  });
+
+  await new Promise((res) => setTimeout(res, 3000));
+
+  const peer1 = await SocketWithBuffers.create('localhost:18019');
+  const peer2 = await SocketWithBuffers.create('localhost:18020');
+
+  peer1.sendMessage('{"type":"hello","version":"0.10.0","agent":"b0b3r_2"}');
+  peer2.sendMessage('{"type":"hello","version":"0.10.0","agent":"b0b3r_2"}');
+  peer1.sendMessage('{"type":"getpeers"}');
+  peer2.sendMessage('{"type":"getpeers"}');
+
+  await new Promise((res) => setTimeout(res, 3000));
+
+  expect(
+    peer1.receivedMessages.some(
+      (message) => message.includes('"type":"peers"') && message.includes('localhost:18020'),
+    ),
+  ).toBeTruthy();
+  expect(
+    peer2.receivedMessages.some(
+      (message) => message.includes('"type":"peers"') && message.includes('localhost:18019'),
+    ),
+  ).toBeTruthy();
+
+  cleanupNode(node1);
+  cleanupNode(node2);
+}, 20000);

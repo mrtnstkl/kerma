@@ -18,12 +18,9 @@ import { Peer } from './peer';
 import { Deferred, delay, resolveToReject } from './promise';
 import { mempool } from './mempool';
 import { Literal, match, Record, Static, Union, when } from 'runtypes';
+import { OBJECT_DATABASE_DIRECTORY } from './env';
 
-const envDatabaseDirectory = process.env.OBJECT_DATABASE_DIRECTORY;
-const databaseDirectory =
-  envDatabaseDirectory !== undefined && envDatabaseDirectory !== '' ? envDatabaseDirectory : './db';
-
-export const db = new level(databaseDirectory);
+export const db = new level(OBJECT_DATABASE_DIRECTORY);
 const OBJECT_AVAILABILITY_TIMEOUT = 5000; // ms
 
 export const ValidationResult = Union(

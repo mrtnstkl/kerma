@@ -2,8 +2,7 @@ import { db } from './object';
 import { logger } from './logger';
 import isValidHostname from 'is-valid-hostname';
 import * as rt from 'runtypes';
-
-const BOOTSTRAP_PEERS: string[] = ['128.130.122.73:18018'];
+import { BOOTSTRAP_PEERS } from './env';
 
 class PeerManager {
   knownPeers: Set<string> = new Set();

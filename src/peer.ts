@@ -34,10 +34,7 @@ import { network } from './network';
 import { ObjectId } from './object';
 import { chainManager } from './chain';
 import { mempool } from './mempool';
-
-const VERSION = '0.10.0';
-const NAME = 'b0b3r';
-const HOST_ADDRESS = 'kerma.gnorts.xyz:18018';
+import { AGENT_HOST_ADDRESS, AGENT_NAME, AGENT_VERSION } from './env';
 
 const HANDSHAKE_WAIT_TIME = 20000;
 
@@ -57,8 +54,8 @@ export class Peer {
   async sendHello() {
     const hello: HelloMessageType = {
       type: 'hello',
-      version: VERSION,
-      agent: NAME,
+      version: AGENT_VERSION,
+      agent: AGENT_NAME,
     };
 
     this.sendMessage(hello);
@@ -73,7 +70,7 @@ export class Peer {
   async sendPeers() {
     const sendPeersMessage: PeersMessageType = {
       type: 'peers',
-      peers: [HOST_ADDRESS, ...[...peerManager.knownPeers].slice(0, MAX_PEERS_PER_PEER - 1)],
+      peers: [AGENT_HOST_ADDRESS, ...[...peerManager.knownPeers].slice(0, MAX_PEERS_PER_PEER - 1)],
     };
 
     this.sendMessage(sendPeersMessage);
