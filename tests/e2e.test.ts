@@ -235,9 +235,6 @@ test('reacts correctly to invalid transactions', async () => {
   expect(grader3.receivedErrorMessage('INVALID_TX_CONSERVATION')).toBeTruthy();
 }, 20000);
 
-// Still to check:
-// - INVALID_TX_CONSERVATION error - someone tries to spend more than they have.
-
 // More test cases:
 // - object with given txid exists but is a block (INVALID_FORMAT) - for task 2 we are guaranteed, there will be no blocks, but TODO for future
 // - The referenced transaction is invalid (INVALID_ANCESTRY) - when does it happen???
