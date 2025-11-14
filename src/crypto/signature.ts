@@ -1,4 +1,4 @@
-import ed25519 from '@noble/ed25519';
+import { verify } from '@noble/ed25519';
 
 export type PublicKey = string;
 export type Signature = string;
@@ -11,7 +11,8 @@ export type Signature = string;
  */
 export async function ver(sig: Signature, message: string, pubkey: PublicKey) {
   try {
-    return ed25519.verify(sig, message, pubkey);
+    const encodedMessage = new TextEncoder().encode(message);
+    return verify(sig, encodedMessage, pubkey);
   } catch (error) {
     return false;
   }

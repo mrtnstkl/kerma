@@ -183,4 +183,50 @@ test('saves object and sends it back', async () => {
       '{"type":"ihaveobject","895ca2bea390b7508f780c7174900a631e73905dcdc6c07a6b61ede2ebd4033f"}',
     ),
   );
+
+  expect(grader1.receivedErrorMessage()).toBeFalsy();
+  expect(grader2.receivedErrorMessage()).toBeFalsy();
 }, 20000);
+
+test('reacts correctly to invalid transactions', async () => {
+  const grader1 = await SocketWithBuffers.create();
+  const grader2 = await SocketWithBuffers.create();
+
+  grader1.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_1"}');
+  grader2.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_2"}');
+
+  const transactionMessageWithUnknownTransactionId =
+    '{"object":{"inputs":[{"outpoint":{"index":0,"txid":"0000000000000000000000000004cb0b7286850e4c9c777d7e3c6e459b289347"},"sig":"6204bbab1b736ce2133c4ea43aff3767c49c881ac80b57ba38a3bab980466644cdbacc86b1f4357cfe45e6374b963f5455f26df0a86338310df33e50c15d7f04"}],"outputs":[{"pubkey":"b539258e808b3e3354b9776d1ff4146b52282e864f56224e7e33e7932ec72985","value":10},{"pubkey":"8dbcd2401c89c04d6e53c81c90aa0b551cc8fc47c0469217c8f5cfbae1e911f9","value":49999999999990}],"type":"transaction"},"type":"object"}';
+
+  grader1.sendMessage(transactionMessageWithUnknownTransactionId);
+
+  await new Promise((res) => setTimeout(res, 1000));
+
+  // Should return UNKNOWN_OBJECT error, but not drop the connection
+  expect(grader1.receivedErrorMessage('UNKNOWN_OBJECT')).toBeTruthy();
+
+  const transactionMessageWithInvalidSignature =
+    '{"object":{"inputs":[{"outpoint":{"index":0,"txid":"d46d09138f0251edc32e28f1a744cb0b7286850e4c9c777d7e3c6e459b289347"},"sig":"0000000000000002133c4ea43aff3767c49c881ac80b57ba38a3bab980466644cdbacc86b1f4357cfe45e6374b963f5455f26df0a86338310df33e50c15d7f04"}],"outputs":[{"pubkey":"b539258e808b3e3354b9776d1ff4146b52282e864f56224e7e33e7932ec72985","value":10},{"pubkey":"8dbcd2401c89c04d6e53c81c90aa0b551cc8fc47c0469217c8f5cfbae1e911f9","value":49999999999990}],"type":"transaction"},"type":"object"}';
+
+  grader1.sendMessage(transactionMessageWithInvalidSignature);
+
+  await new Promise((res) => setTimeout(res, 1000));
+
+  expect(grader1.receivedErrorMessage('INVALID_TX_SIGNATURE')).toBeTruthy();
+
+  const transactionMessageWithInvalidOutpointIndex =
+    '{"object":{"inputs":[{"outpoint":{"index":1,"txid":"d46d09138f0251edc32e28f1a744cb0b7286850e4c9c777d7e3c6e459b289347"},"sig":"6204bbab1b736ce2133c4ea43aff3767c49c881ac80b57ba38a3bab980466644cdbacc86b1f4357cfe45e6374b963f5455f26df0a86338310df33e50c15d7f04"}],"outputs":[{"pubkey":"b539258e808b3e3354b9776d1ff4146b52282e864f56224e7e33e7932ec72985","value":10},{"pubkey":"8dbcd2401c89c04d6e53c81c90aa0b551cc8fc47c0469217c8f5cfbae1e911f9","value":49999999999990}],"type":"transaction"},"type":"object"}';
+
+  grader2.sendMessage(transactionMessageWithInvalidOutpointIndex);
+
+  await new Promise((res) => setTimeout(res, 1000));
+
+  expect(grader2.receivedErrorMessage('INVALID_TX_OUTPOINT')).toBeTruthy();
+}, 20000);
+
+// Still to check:
+// - INVALID_TX_CONSERVATION error - someone tries to spend more than they have.
+
+// More test cases:
+// - object with given txid exists but is a block (INVALID_FORMAT) - for task 2 we are guaranteed, there will be no blocks, but TODO for future
+// - The referenced transaction is invalid (INVALID_ANCESTRY) - when does it happen???
