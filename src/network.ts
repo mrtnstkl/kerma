@@ -4,6 +4,7 @@ import { logger } from './logger';
 import { Peer } from './peer';
 import { EventEmitter } from 'events';
 import { peerManager } from './peermanager';
+import { ObjectId } from './object';
 
 class Network {
   peers: Set<Peer> = new Set();
@@ -24,6 +25,7 @@ class Network {
       const peer = new Peer(client, remoteAddrWithPort);
 
       this.peers.add(peer);
+      client.netSocket.on('close', _ => this.peers.delete(peer));
 
       // As there will be no connect event sent by the socket, notify the peer about the connection here.
       peer.onConnect();
@@ -48,6 +50,7 @@ class Network {
         peer.onConnect();
 
         this.peers.add(peer);
+        client.netSocket.on('close', _ => this.peers.delete(peer));
       } catch (error) {
         // Node not reachable, drop it
         logger.warn(`Failed to connect to peer ${peerAddr}. Dropping...`);
@@ -56,10 +59,9 @@ class Network {
     }
   }
 
-  broadcast(obj: object) {
-    logger.info(`Broadcasting object to all peers: %o`, obj);
-
-    /* TODO */
+  broadcast(oid: ObjectId) {
+    logger.info(`Broadcasting object to ${this.peers.size} connected peers: ${oid}`);
+    this.peers.forEach(peer => peer.sendIHaveObject(oid));
   }
 }
 
