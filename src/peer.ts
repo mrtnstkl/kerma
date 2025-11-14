@@ -28,6 +28,9 @@ import {
   GetMempoolMessage,
   MempoolMessage,
   GeneralTransactionObjectType,
+  TransactionObject,
+  GeneralTransactionObject,
+  BlockObject,
 } from './message';
 import { peerManager } from './peermanager';
 import { db, objectManager } from './object';
@@ -36,6 +39,7 @@ import { ObjectId } from './object';
 import { chainManager } from './chain';
 import { mempool } from './mempool';
 import { Transaction } from './transaction';
+import { match, when } from 'runtypes';
 
 const VERSION = '0.10.0';
 const NAME = 'b0b3r';
@@ -296,18 +300,26 @@ export class Peer {
       return;
     }
 
-    // we dont, so validate and store it
-    const validation = await Transaction.validate(msg.object);
+    await match(
+      when(GeneralTransactionObject, async (transaction) => {
+        const validation = await Transaction.validate(transaction);
 
-    if (validation.success) {
-      this.info(`Received new object from peer`);
-      const objectId = await objectManager.put(msg.object);
-      // gossip to other peers
-      network.broadcast(objectId);
-    } else {
-      this.debug(`Received object is invalid: ${validation.error.msg}`);
-      return this.sendError(validation.error.name, validation.error.msg);
-    }
+        if (!validation.success) {
+          this.debug(`Received object is invalid: ${validation.error.msg}`);
+          return this.sendError(validation.error.name, validation.error.msg);
+        }
+
+        this.info(`Received new object from peer`);
+        const objectId = await objectManager.put(msg.object);
+
+        // Gossip to other peers
+        network.broadcast(objectId);
+      }),
+      when(BlockObject, async (block) => {
+        this.debug(`Received block object which is not supported`);
+        await this.fatalError('INVALID_FORMAT', 'Block object is not supported');
+      }),
+    )(msg.object);
   }
   async onMessageGetChainTip(msg: GetChainTipMessageType) {
     if (this.hasExtraFields(msg, GetChainTipMessage.fields)) {

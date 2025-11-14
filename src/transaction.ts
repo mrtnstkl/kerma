@@ -12,14 +12,28 @@ import {
   ObjectType,
   ErrorMessageType,
   BlockObject,
+  GeneralTransactionObject,
 } from './message';
-import { isValidPublicKey, PublicKey, Signature } from './crypto/signature';
+import { PublicKey, Signature } from './crypto/signature';
 import { ver } from './crypto/signature';
 import { logger } from './logger';
 import { Block } from './block';
-import { Peer } from '@src/peer';
+import { Peer } from './peer';
 import { match, when } from 'runtypes';
 
+class ObjectNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ObjectNotFoundError';
+  }
+}
+
+class InvalidFormatError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidFormatError';
+  }
+}
 /**
  * a class to represent a transaction output
  */
@@ -61,14 +75,16 @@ export class Outpoint {
    * @returns the referenced output
    */
   async resolve(): Promise<Output> {
-    const tx = (await objectManager.get(this.txid)) as TransactionObjectType;
+    const tx = (await objectManager.get(this.txid)) as GeneralTransactionObjectType;
     if (!tx) {
-      throw new Error(`UNKNOWN_OBJECT: Transaction ${this.txid} not found in database.`);
+      throw new ObjectNotFoundError(
+        `UNKNOWN_OBJECT: Transaction ${this.txid} not found in database.`,
+      );
     }
 
     const outputData = tx.outputs[this.index];
     if (!outputData) {
-      throw new Error(
+      throw new InvalidFormatError(
         `Invalid outpoint: Index ${this.index} is out of bounds for tx ${this.txid}.`,
       );
     }
@@ -119,7 +135,7 @@ export class Input {
    * @returns this input without a signature
    */
   toUnsigned(): Input {
-    return new Input(this.outpoint, '');
+    return new Input(this.outpoint, null);
   }
 }
 
@@ -142,13 +158,11 @@ export class Transaction {
   static fromNetworkObject(txObj: GeneralTransactionObjectType): Transaction {
     const outputs = Transaction.outputsFromNetworkObject(txObj.outputs);
 
-    if (TransactionObject.validate(txObj).success) {
+    if ('height' in txObj) {
+      return new Transaction(outputs, undefined, txObj.height);
+    } else {
       const inputs = Transaction.inputsFromNetworkObject((txObj as TransactionObjectType).inputs);
       return new Transaction(outputs, inputs, undefined);
-    } else if (CoinbaseTransactionObject.validate(txObj).success) {
-      return new Transaction(outputs, undefined, (txObj as CoinbaseTransactionObjectType).height);
-    } else {
-      throw new Error('Invalid Transaction object!');
     }
   }
 
@@ -170,106 +184,106 @@ export class Transaction {
     return (!this.inputs || this.inputs.length === 0) && this.height != undefined;
   }
 
-  static async validate(object: ObjectType): Promise<ValidationResultType> {
-    const ok: ValidationResultType = { success: true };
-    return await match(
-      when(TransactionObject, async (obj) => {
-        // We're checking a regular tx, so it must have inputs
-        if (!obj.inputs || obj.inputs.length === 0) {
+  static async validateTransaction(obj: TransactionObjectType): Promise<ValidationResultType> {
+    const txInstance = Transaction.fromNetworkObject(obj);
+
+    // We're checking a regular tx, so it must have inputs
+    if (!txInstance.inputs || txInstance.inputs.length === 0) {
+      const error: ErrorMessageType = {
+        type: 'error',
+        msg: 'Inputs are missing.',
+        name: 'INVALID_FORMAT',
+      };
+      return { success: false, error };
+    }
+
+    let totalInputValue = 0;
+    let totalOutputValue = 0;
+
+    for (const output of obj.outputs) {
+      totalOutputValue += output.value;
+    }
+
+    // --- Step 2b: Verify Signature (Preparation) ---
+    // We must re-create the Transaction class to call its 'toNetworkObject(false)'
+    // This is complex, but it's what's required if we do validation here.
+    const unsignedTxObject = txInstance.toNetworkObject(false);
+    const canonicalString = objectManager.toCanonicalString(unsignedTxObject);
+
+    for (const input of txInstance.inputs) {
+      let referencedOutput: Output;
+
+      try {
+        referencedOutput = await input.outpoint.resolve();
+      } catch (err) {
+        if (!(err instanceof ObjectNotFoundError || err instanceof InvalidFormatError)) {
           const error: ErrorMessageType = {
             type: 'error',
-            msg: 'Inputs are missing.',
+            msg: 'Unknown error.',
             name: 'INVALID_FORMAT',
           };
           return { success: false, error };
         }
 
-        let totalInputValue = 0;
-        let totalOutputValue = 0;
-
-        for (const output of obj.outputs) {
-          totalOutputValue += output.value;
-        }
-
-        // --- Step 2b: Verify Signature (Preparation) ---
-        // We must re-create the Transaction class to call its 'toNetworkObject(false)'
-        // This is complex, but it's what's required if we do validation here.
-        const txInstance = Transaction.fromNetworkObject(obj);
-        const unsignedTxObject = txInstance.toNetworkObject(false);
-        const canonicalString = objectManager.toCanonicalString(unsignedTxObject);
-
-        for (const input of obj.inputs) {
-          if (!(await objectManager.exists(input.outpoint.txid))) {
-            const error: ErrorMessageType = {
-              type: 'error',
-              msg: `Referenced txid not found: ${input.outpoint.txid}`,
-              name: 'UNKNOWN_OBJECT',
-            };
-            return { success: false, error };
-          }
-
-          let referencedTx: ObjectType = await objectManager.get(input.outpoint.txid);
-          const referencedOutput = (referencedTx as TransactionObjectType).outputs[
-            input.outpoint.index
-          ];
-          if (!referencedOutput) {
-            const error: ErrorMessageType = {
-              type: 'error',
-              msg: `Invalid outpoint: Index ${input.outpoint.index} is out of bounds for tx ${input.outpoint.txid}.`,
-              name: 'INVALID_FORMAT',
-            };
-            return { success: false, error };
-          }
-          totalInputValue += referencedOutput.value;
-          // --- Step 2b: Verify Signature ---
-          const { sig } = input;
-          const { pubkey } = referencedOutput;
-
-          if (!sig || sig === '') {
-            const error: ErrorMessageType = {
-              type: 'error',
-              msg: `Input signature is missing for ${input.outpoint.txid}:${input.outpoint.index}`,
-              name: 'INVALID_FORMAT',
-            };
-            return { success: false, error };
-          }
-          if (!(await ver(canonicalString, sig, pubkey))) {
-            const error: ErrorMessageType = {
-              type: 'error',
-              msg: `Invalid signature for input ${input.outpoint.txid}:${input.outpoint.index}`,
-              name: 'INVALID_FORMAT',
-            };
-            return { success: false, error };
-          }
-
-          // --- Step 2d: Weak Law of Conservation ---
-          if (totalInputValue < totalOutputValue) {
-            const error: ErrorMessageType = {
-              type: 'error',
-              msg: `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
-              name: 'INVALID_FORMAT',
-            };
-            return { success: false, error };
-          }
-        }
-        return ok;
-      }),
-
-      when(CoinbaseTransactionObject, async (_) => {
-        // For task 2 syntactically valid CoinbaseTransactionObjects are valid.
-        return ok;
-      }),
-
-      when(BlockObject, async (obj) => {
-        // todo: for assignment 2, only transaction objects are valid
         const error: ErrorMessageType = {
           type: 'error',
-          msg: 'Invalid object received',
+          msg: err.message,
+          name: err instanceof ObjectNotFoundError ? 'UNKNOWN_OBJECT' : 'INVALID_FORMAT',
+        };
+        return { success: false, error };
+      }
+
+      totalInputValue += referencedOutput.value;
+      // --- Step 2b: Verify Signature ---
+      const { sig } = input;
+      const { pubkey } = referencedOutput;
+
+      if (sig === null) {
+        const error: ErrorMessageType = {
+          type: 'error',
+          msg: `Input signature is missing for ${input.outpoint.txid}:${input.outpoint.index}`,
           name: 'INVALID_FORMAT',
         };
         return { success: false, error };
-      }),
-    )(object);
+      }
+
+      if (!(await ver(canonicalString, sig, pubkey))) {
+        const error: ErrorMessageType = {
+          type: 'error',
+          msg: `Invalid signature for input ${input.outpoint.txid}:${input.outpoint.index}`,
+          name: 'INVALID_FORMAT',
+        };
+        return { success: false, error };
+      }
+
+      // --- Step 2d: Weak Law of Conservation ---
+      if (totalInputValue < totalOutputValue) {
+        const error: ErrorMessageType = {
+          type: 'error',
+          msg: `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
+          name: 'INVALID_FORMAT',
+        };
+        return { success: false, error };
+      }
+    }
+
+    return { success: true };
+  }
+
+  static async validateCoinbaseTransaction(
+    obj: CoinbaseTransactionObjectType,
+  ): Promise<ValidationResultType> {
+    return { success: true };
+  }
+
+  static async validate(
+    anyTransaction: GeneralTransactionObjectType,
+  ): Promise<ValidationResultType> {
+    if ('height' in anyTransaction) {
+      return Transaction.validateCoinbaseTransaction(anyTransaction);
+    } else {
+      return Transaction.validateTransaction(anyTransaction);
+    }
   }
 
   inputsUnsigned(): Input[] {

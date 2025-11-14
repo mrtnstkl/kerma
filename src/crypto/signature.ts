@@ -16,9 +16,3 @@ export async function ver(sig: Signature, message: string, pubkey: PublicKey) {
     return false;
   }
 }
-
-export function isValidPublicKey(pubkey: string): boolean {
-  // Regex to check for a 64-character hex string
-  const hexRegex = /^[0-9a-fA-F]{64}$/;
-  return hexRegex.test(pubkey);
-}

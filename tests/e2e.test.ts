@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { ChildProcess, spawn } from 'child_process';
-import { MessageSocket } from '@src/network';
+import { MessageSocket } from '../src/network';
 
 const DEFAULT_HOST = 'localhost:18018';
 
@@ -178,4 +178,9 @@ test('saves object and sends it back', async () => {
   await new Promise((res) => setTimeout(res, 1000));
 
   expect(grader1.receivedMessages.includes(transactionMessage));
+  expect(
+    grader2.receivedMessages.includes(
+      '{"type":"ihaveobject","895ca2bea390b7508f780c7174900a631e73905dcdc6c07a6b61ede2ebd4033f"}',
+    ),
+  );
 }, 20000);
