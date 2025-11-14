@@ -184,8 +184,8 @@ export class Transaction {
     return (!this.inputs || this.inputs.length === 0) && this.height != undefined;
   }
 
-  static async validateTransaction(obj: TransactionObjectType): Promise<ValidationResultType> {
-    const txInstance = Transaction.fromNetworkObject(obj);
+  static async validateTransaction(txObj: TransactionObjectType): Promise<ValidationResultType> {
+    const txInstance = Transaction.fromNetworkObject(txObj);
 
     // We're checking a regular tx, so it must have inputs
     if (!txInstance.inputs || txInstance.inputs.length === 0) {
@@ -200,7 +200,7 @@ export class Transaction {
     let totalInputValue = 0;
     let totalOutputValue = 0;
 
-    for (const output of obj.outputs) {
+    for (const output of txObj.outputs) {
       totalOutputValue += output.value;
     }
 
@@ -271,18 +271,16 @@ export class Transaction {
   }
 
   static async validateCoinbaseTransaction(
-    obj: CoinbaseTransactionObjectType,
+    txObj: CoinbaseTransactionObjectType,
   ): Promise<ValidationResultType> {
     return { success: true };
   }
 
-  static async validate(
-    anyTransaction: GeneralTransactionObjectType,
-  ): Promise<ValidationResultType> {
-    if ('height' in anyTransaction) {
-      return Transaction.validateCoinbaseTransaction(anyTransaction);
+  static async validate(txObj: GeneralTransactionObjectType): Promise<ValidationResultType> {
+    if ('height' in txObj) {
+      return Transaction.validateCoinbaseTransaction(txObj);
     } else {
-      return Transaction.validateTransaction(anyTransaction);
+      return Transaction.validateTransaction(txObj);
     }
   }
 
