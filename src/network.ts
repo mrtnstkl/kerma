@@ -25,11 +25,15 @@ class Network {
       const peer = new Peer(client, remoteAddrWithPort);
 
       this.peers.add(peer);
-      client.netSocket.on('close', _ => this.peers.delete(peer));
+      client.netSocket.on('close', (_) => this.peers.delete(peer));
 
       // As there will be no connect event sent by the socket, notify the peer about the connection here.
       peer.onConnect();
       peerManager.peerDiscovered(remoteAddrWithPort);
+    });
+
+    server.on('error', (err) => {
+      logger.error(`Server received an error: ${err}`);
     });
 
     logger.info(`Listening for connections on port ${bindPort} and IP ${bindIP}`);
@@ -50,7 +54,7 @@ class Network {
         peer.onConnect();
 
         this.peers.add(peer);
-        client.netSocket.on('close', _ => this.peers.delete(peer));
+        client.netSocket.on('close', (_) => this.peers.delete(peer));
       } catch (error) {
         // Node not reachable, drop it
         logger.warn(`Failed to connect to peer ${peerAddr}. Dropping...`);
@@ -61,7 +65,7 @@ class Network {
 
   broadcast(oid: ObjectId) {
     logger.info(`Broadcasting object to ${this.peers.size} connected peers: ${oid}`);
-    this.peers.forEach(peer => peer.sendIHaveObject(oid));
+    this.peers.forEach((peer) => peer.sendIHaveObject(oid));
   }
 }
 
@@ -108,7 +112,7 @@ export class MessageSocket extends EventEmitter {
   }
 
   sendMessage(message: string, callback?: (err?: Error) => void) {
-    if (this.netSocket.destroyed || this.netSocket.writableEnded) {
+    if (!this.netSocket.writable) {
       logger.warn(`Tried to write after socket closed`);
       return;
     }
@@ -117,7 +121,7 @@ export class MessageSocket extends EventEmitter {
   }
 
   end() {
-    this.netSocket.destroy();
+    this.netSocket.end();
     // TODO: Should anything else happen here?
   }
 }

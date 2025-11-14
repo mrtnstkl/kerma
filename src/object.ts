@@ -119,40 +119,6 @@ class ObjectManager {
     return objectid;
   }
 
-  async validate(object: ObjectType, peer: Peer): Promise<ValidationResultType> {
-    const ok: ValidationResultType = { success: true };
-    return await match(
-      when(TransactionObject, async (obj) => {
-        // check if all objects referenced by inputs are known
-        for (const input of obj.inputs) {
-          if (!(await this.exists(input.outpoint.txid))) {
-            const error: ErrorMessageType = {
-              type: 'error',
-              msg: `Referenced txid not found: ${input.outpoint.txid}`,
-              name: 'UNKNOWN_OBJECT',
-            };
-            return { success: false, error };
-          }
-        }
-        return ok;
-      }),
-
-      when(CoinbaseTransactionObject, async (obj) => {
-        return ok;
-      }),
-
-      when(BlockObject, async (obj) => {
-        // todo: for assignment 2, only transaction objects are valid
-        const error: ErrorMessageType = {
-          type: 'error',
-          msg: 'Invalid object received',
-          name: 'INVALID_FORMAT',
-        };
-        return { success: false, error };
-      }),
-    )(object);
-  }
-
   /**
    * Attempts to retrieve an object from a peer
    * @param objectid the object to get

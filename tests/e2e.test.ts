@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { ChildProcess, spawn } from 'child_process';
-import { MessageSocket } from '@src/network';
+import { MessageSocket } from '../src/network';
 
 const DEFAULT_HOST = 'localhost:18018';
 
@@ -70,6 +70,7 @@ const startNode = () => {
   const proc = spawn('npm', ['run', 'start'], {
     env: { ...process.env, OBJECT_DATABASE_DIRECTORY: databaseDirectory },
     stdio: 'inherit',
+    shell: true,
   });
 
   processes.push(proc);
@@ -135,3 +136,51 @@ test('fails on no hello message', async () => {
 
   expect(peer.receivedErrorMessage('INVALID_HANDSHAKE')).toBeTruthy();
 }, 25000);
+
+test('saves object and sends it back', async () => {
+  const grader1 = await SocketWithBuffers.create();
+  const grader2 = await SocketWithBuffers.create();
+
+  const coinbaseTransactionMessage =
+    '{"object":{"height":0,"outputs":[{"pubkey":"85acb336a150b16a9c6c8c27a4e9c479d9f99060a7945df0bb1b53365e98969b","value":50000000000000}],"type":"transaction"},"type":"object"}';
+
+  grader1.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_1"}');
+  grader1.sendMessage(coinbaseTransactionMessage);
+
+  grader2.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_2"}');
+
+  await new Promise((res) => setTimeout(res, 1000));
+
+  grader1.sendMessage(
+    '{"type":"getobject","objectid":"d46d09138f0251edc32e28f1a744cb0b7286850e4c9c777d7e3c6e459b289347"}',
+  );
+
+  await new Promise((res) => setTimeout(res, 1000));
+
+  expect(grader1.receivedMessages.includes(coinbaseTransactionMessage));
+  expect(
+    grader2.receivedMessages.includes(
+      '{"type":"ihaveobject","d46d09138f0251edc32e28f1a744cb0b7286850e4c9c777d7e3c6e459b289347"}',
+    ),
+  );
+
+  const transactionMessage =
+    '{"object":{"inputs":[{"outpoint":{"index":0,"txid":"d46d09138f0251edc32e28f1a744cb0b7286850e4c9c777d7e3c6e459b289347"},"sig":"6204bbab1b736ce2133c4ea43aff3767c49c881ac80b57ba38a3bab980466644cdbacc86b1f4357cfe45e6374b963f5455f26df0a86338310df33e50c15d7f04"}],"outputs":[{"pubkey":"b539258e808b3e3354b9776d1ff4146b52282e864f56224e7e33e7932ec72985","value":10},{"pubkey":"8dbcd2401c89c04d6e53c81c90aa0b551cc8fc47c0469217c8f5cfbae1e911f9","value":49999999999990}],"type":"transaction"},"type":"object"}';
+
+  grader1.sendMessage(transactionMessage);
+
+  await new Promise((res) => setTimeout(res, 1000));
+
+  grader1.sendMessage(
+    '{"type":"getobject","objectid":"895ca2bea390b7508f780c7174900a631e73905dcdc6c07a6b61ede2ebd4033f"}',
+  );
+
+  await new Promise((res) => setTimeout(res, 1000));
+
+  expect(grader1.receivedMessages.includes(transactionMessage));
+  expect(
+    grader2.receivedMessages.includes(
+      '{"type":"ihaveobject","895ca2bea390b7508f780c7174900a631e73905dcdc6c07a6b61ede2ebd4033f"}',
+    ),
+  );
+}, 20000);
