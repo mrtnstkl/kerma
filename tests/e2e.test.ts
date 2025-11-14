@@ -192,10 +192,14 @@ test('reacts correctly to invalid transactions', async () => {
   const grader1 = await SocketWithBuffers.create();
   const grader2 = await SocketWithBuffers.create();
   const grader3 = await SocketWithBuffers.create();
+  const grader4 = await SocketWithBuffers.create();
+  const grader5 = await SocketWithBuffers.create();
 
   grader1.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_1"}');
   grader2.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_2"}');
   grader3.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_3"}');
+  grader4.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_4"}');
+  grader5.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_5"}');
 
   const transactionMessageWithUnknownTransactionId =
     '{"object":{"inputs":[{"outpoint":{"index":0,"txid":"0000000000000000000000000004cb0b7286850e4c9c777d7e3c6e459b289347"},"sig":"6204bbab1b736ce2133c4ea43aff3767c49c881ac80b57ba38a3bab980466644cdbacc86b1f4357cfe45e6374b963f5455f26df0a86338310df33e50c15d7f04"}],"outputs":[{"pubkey":"b539258e808b3e3354b9776d1ff4146b52282e864f56224e7e33e7932ec72985","value":10},{"pubkey":"8dbcd2401c89c04d6e53c81c90aa0b551cc8fc47c0469217c8f5cfbae1e911f9","value":49999999999990}],"type":"transaction"},"type":"object"}';
@@ -233,6 +237,32 @@ test('reacts correctly to invalid transactions', async () => {
   await new Promise((res) => setTimeout(res, 1000));
 
   expect(grader3.receivedErrorMessage('INVALID_TX_CONSERVATION')).toBeTruthy();
+
+  const transactionMessageWithEmptyInputs =
+    '{"object":{"inputs":[],"outputs":[{"pubkey":"b539258e808b3e3354b9776d1ff4146b52282e864f56224e7e33e7932ec72985","value":20},{"pubkey":"8dbcd2401c89c04d6e53c81c90aa0b551cc8fc47c0469217c8f5cfbae1e911f9","value":49999999999990}],"type":"transaction"},"type":"object"}';
+
+  grader4.sendMessage(transactionMessageWithEmptyInputs);
+
+  await new Promise((res) => setTimeout(res, 1000));
+
+  expect(grader4.receivedErrorMessage('INVALID_FORMAT')).toBeTruthy();
+
+  const transactionMessageWithEmptyOutputs =
+    '{"object":{"inputs":[{"outpoint":{"index":0,"txid":"d46d09138f0251edc32e28f1a744cb0b7286850e4c9c777d7e3c6e459b289347"},"sig":"0000000000000002133c4ea43aff3767c49c881ac80b57ba38a3bab980466644cdbacc86b1f4357cfe45e6374b963f5455f26df0a86338310df33e50c15d7f04"}],"outputs":[],"type":"transaction"},"type":"object"}';
+
+  grader5.sendMessage(transactionMessageWithEmptyOutputs);
+
+  await new Promise((res) => setTimeout(res, 1000));
+
+  // Empty list of outputs is acceptable, so a transaction with an empty list of outputs and an incorrect signature will fail on a signature check,
+  // which happens at the end.
+  expect(grader5.receivedErrorMessage('INVALID_TX_SIGNATURE')).toBeTruthy();
+
+  expect(grader1.receivedMessages.some((message) => message.includes('ihaveobject'))).toBeFalsy();
+  expect(grader2.receivedMessages.some((message) => message.includes('ihaveobject'))).toBeFalsy();
+  expect(grader3.receivedMessages.some((message) => message.includes('ihaveobject'))).toBeFalsy();
+  expect(grader4.receivedMessages.some((message) => message.includes('ihaveobject'))).toBeFalsy();
+  expect(grader5.receivedMessages.some((message) => message.includes('ihaveobject'))).toBeFalsy();
 }, 20000);
 
 // More test cases:
