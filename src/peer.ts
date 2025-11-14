@@ -84,10 +84,10 @@ export class Peer {
 
     this.sendMessage(sendPeersMessage);
   }
-  async sendIHaveObject(obj: any) {
+  async sendIHaveObject(objid: ObjectId) {
     const ihaveobject: IHaveObjectMessageType = {
       type: 'ihaveobject',
-      objectid: objectManager.id(obj),
+      objectid: objid,
     };
     this.sendMessage(ihaveobject);
   }
@@ -306,11 +306,15 @@ export class Peer {
 
         if (!validation.success) {
           this.debug(`Received object is invalid: ${validation.error.msg}`);
-          return this.sendError(validation.error.name, validation.error.msg);
+          if (validation.error.name === 'UNKNOWN_OBJECT') {
+            return this.sendError(validation.error.name, validation.error.msg);
+          } else {
+            return this.fatalError(validation.error.name, validation.error.msg);
+          }
         }
 
         this.info(`Received new object from peer`);
-        const objectId = await objectManager.put(msg.object);
+        const objectId = await objectManager.put(transaction);
 
         // Gossip to other peers
         network.broadcast(objectId);

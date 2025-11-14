@@ -158,6 +158,9 @@ export const ErrorCode = Union(
   Literal('INVALID_FORMAT'),
   Literal('INVALID_HANDSHAKE'),
   Literal('UNKNOWN_OBJECT'),
+  Literal('INVALID_TX_SIGNATURE'),
+  Literal('INVALID_TX_CONSERVATION'),
+  Literal('INVALID_TX_OUTPOINT'),
 ); // TODO: Add rest of the error codes
 export type ErrorCodeType = Static<typeof ErrorCode>;
 

@@ -28,7 +28,7 @@ class ObjectNotFoundError extends Error {
   }
 }
 
-class InvalidFormatError extends Error {
+class InvalidOutpointError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'InvalidFormatError';
@@ -75,8 +75,11 @@ export class Outpoint {
    * @returns the referenced output
    */
   async resolve(): Promise<Output> {
-    const tx = (await objectManager.get(this.txid)) as GeneralTransactionObjectType;
-    if (!tx) {
+    let tx: GeneralTransactionObjectType;
+
+    try {
+      tx = (await objectManager.get(this.txid)) as GeneralTransactionObjectType;
+    } catch {
       throw new ObjectNotFoundError(
         `UNKNOWN_OBJECT: Transaction ${this.txid} not found in database.`,
       );
@@ -84,7 +87,7 @@ export class Outpoint {
 
     const outputData = tx.outputs[this.index];
     if (!outputData) {
-      throw new InvalidFormatError(
+      throw new InvalidOutpointError(
         `Invalid outpoint: Index ${this.index} is out of bounds for tx ${this.txid}.`,
       );
     }
@@ -216,7 +219,7 @@ export class Transaction {
       try {
         referencedOutput = await input.outpoint.resolve();
       } catch (err) {
-        if (!(err instanceof ObjectNotFoundError || err instanceof InvalidFormatError)) {
+        if (!(err instanceof ObjectNotFoundError || err instanceof InvalidOutpointError)) {
           const error: ErrorMessageType = {
             type: 'error',
             msg: 'Unknown error.',
@@ -228,13 +231,24 @@ export class Transaction {
         const error: ErrorMessageType = {
           type: 'error',
           msg: err.message,
-          name: err instanceof ObjectNotFoundError ? 'UNKNOWN_OBJECT' : 'INVALID_FORMAT',
+          name: err instanceof ObjectNotFoundError ? 'UNKNOWN_OBJECT' : 'INVALID_TX_OUTPOINT',
         };
         return { success: false, error };
       }
 
       totalInputValue += referencedOutput.value;
-      // --- Step 2b: Verify Signature ---
+
+      if (totalInputValue < totalOutputValue) {
+        const error: ErrorMessageType = {
+          type: 'error',
+          msg: `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
+          name: 'INVALID_TX_CONSERVATION',
+        };
+        return { success: false, error };
+      }
+
+      // Check the signature at the end, so that the prerequisite for the signature check is perfectly correct transaction.
+
       const { sig } = input;
       const { pubkey } = referencedOutput;
 
@@ -247,21 +261,11 @@ export class Transaction {
         return { success: false, error };
       }
 
-      if (!(await ver(canonicalString, sig, pubkey))) {
+      if (!(await ver(sig, canonicalString, pubkey))) {
         const error: ErrorMessageType = {
           type: 'error',
           msg: `Invalid signature for input ${input.outpoint.txid}:${input.outpoint.index}`,
-          name: 'INVALID_FORMAT',
-        };
-        return { success: false, error };
-      }
-
-      // --- Step 2d: Weak Law of Conservation ---
-      if (totalInputValue < totalOutputValue) {
-        const error: ErrorMessageType = {
-          type: 'error',
-          msg: `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
-          name: 'INVALID_FORMAT',
+          name: 'INVALID_TX_SIGNATURE',
         };
         return { success: false, error };
       }
