@@ -237,7 +237,18 @@ export class Transaction {
       }
 
       totalInputValue += referencedOutput.value;
-      // --- Step 2b: Verify Signature ---
+
+      if (totalInputValue < totalOutputValue) {
+        const error: ErrorMessageType = {
+          type: 'error',
+          msg: `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
+          name: 'INVALID_TX_CONSERVATION',
+        };
+        return { success: false, error };
+      }
+
+      // Check the signature at the end, so that the prerequisite for the signature check is perfectly correct transaction.
+
       const { sig } = input;
       const { pubkey } = referencedOutput;
 
@@ -255,16 +266,6 @@ export class Transaction {
           type: 'error',
           msg: `Invalid signature for input ${input.outpoint.txid}:${input.outpoint.index}`,
           name: 'INVALID_TX_SIGNATURE',
-        };
-        return { success: false, error };
-      }
-
-      // --- Step 2d: Weak Law of Conservation ---
-      if (totalInputValue < totalOutputValue) {
-        const error: ErrorMessageType = {
-          type: 'error',
-          msg: `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
-          name: 'INVALID_FORMAT',
         };
         return { success: false, error };
       }
