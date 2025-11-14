@@ -50,6 +50,7 @@ export class Output {
 export class Outpoint {
   readonly txid: ObjectId;
   readonly index: number;
+
   constructor(txid: ObjectId, index: number) {
     this.index = index;
     this.txid = txid;
@@ -169,126 +170,93 @@ export class Transaction {
     return (!this.inputs || this.inputs.length === 0) && this.height != undefined;
   }
 
-  static async validate (object: ObjectType): Promise<ValidationResultType> {
+  static async validate(object: ObjectType): Promise<ValidationResultType> {
     const ok: ValidationResultType = { success: true };
     return await match(
       when(TransactionObject, async (obj) => {
-          // We're checking a regular tx, so it must have inputs
-          if (!obj.inputs || obj.inputs.length === 0) {
-              const error: ErrorMessageType = {
-                  type: 'error',
-                  msg: 'Inputs are missing.',
-                  name: 'INVALID_FORMAT',
-              };
-              return {success: false, error};
-          }
+        // We're checking a regular tx, so it must have inputs
+        if (!obj.inputs || obj.inputs.length === 0) {
+          const error: ErrorMessageType = {
+            type: 'error',
+            msg: 'Inputs are missing.',
+            name: 'INVALID_FORMAT',
+          };
+          return { success: false, error };
+        }
 
-          let totalInputValue = 0;
-          let totalOutputValue = 0;
+        let totalInputValue = 0;
+        let totalOutputValue = 0;
 
-          // --- Step 2c: Validate Outputs ---
-          for (const output of obj.outputs) {
-              if (!isValidPublicKey(output.pubkey)) {
-                  const error: ErrorMessageType = {
-                      type: 'error',
-                      msg: `Invalid output: bad public key format ${output.pubkey}`,
-                      name: 'INVALID_FORMAT'
-                  };
-                  return {success:false, error};
-              }
-              if (!Number.isInteger(output.value) || output.value < 0) {
-                  const error: ErrorMessageType = {
-                      type: 'error',
-                      msg: `Invalid output: value must be a non-negative integer.`,
-                      name: 'INVALID_FORMAT'
-                  };
-                  return {success:false, error};
-              }
-              totalOutputValue += output.value;
-          }
-
-          // --- Step 2b: Verify Signature (Preparation) ---
-          // We must re-create the Transaction class to call its 'toNetworkObject(false)'
-          // This is complex, but it's what's required if we do validation here.
-          const txInstance = Transaction.fromNetworkObject(obj);
-          const unsignedTxObject = txInstance.toNetworkObject(false);
-          const canonicalString = objectManager.toCanonicalString(unsignedTxObject);
-
-          for (const input of obj.inputs) {
-              if (!(await objectManager.exists(input.outpoint.txid))) {
-                  const error: ErrorMessageType = {
-                      type: 'error',
-                      msg: `Referenced txid not found: ${input.outpoint.txid}`,
-                      name: 'UNKNOWN_OBJECT',
-                  };
-                  return { success: false, error };
-              } else {
-                  let referencedTx: ObjectType = await objectManager.get(input.outpoint.txid);
-                  const referencedOutput = (referencedTx as TransactionObjectType).outputs[input.outpoint.index];
-                  if(!referencedOutput){
-                      const error: ErrorMessageType = {
-                          type: 'error',
-                          msg: `Invalid outpoint: Index ${input.outpoint.index} is out of bounds for tx ${input.outpoint.txid}.`,
-                          name: 'INVALID_FORMAT',
-                      };
-                      return { success: false, error };
-                  }
-                  totalInputValue += referencedOutput.value;
-                  // --- Step 2b: Verify Signature ---
-                  const { sig } = input;
-                  const { pubkey } = referencedOutput;
-
-                  if (!sig || sig === '') {
-                      const error: ErrorMessageType = {
-                          type: 'error',
-                          msg: `Input signature is missing for ${input.outpoint.txid}:${input.outpoint.index}`,
-                          name: 'INVALID_FORMAT',
-                      };
-                      return { success: false, error };
-                  }
-                  if (!(await ver(canonicalString, sig, pubkey))) {
-                      const error: ErrorMessageType = {
-                          type: 'error',
-                          msg: `Invalid signature for input ${input.outpoint.txid}:${input.outpoint.index}`,
-                          name: 'INVALID_FORMAT',
-                      };
-                      return { success: false, error };
-                  }
-              }
-
-              // --- Step 2d: Weak Law of Conservation ---
-              if (totalInputValue < totalOutputValue) {
-                  const error: ErrorMessageType = {
-                      type: 'error',
-                      msg: `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
-                      name: 'INVALID_FORMAT',
-                  };
-                  return { success: false, error };
-              }
-          }
-        return ok;
-      }),
-
-      when(CoinbaseTransactionObject, async (obj) => {
         for (const output of obj.outputs) {
-          if (!isValidPublicKey(output.pubkey)) {
+          totalOutputValue += output.value;
+        }
+
+        // --- Step 2b: Verify Signature (Preparation) ---
+        // We must re-create the Transaction class to call its 'toNetworkObject(false)'
+        // This is complex, but it's what's required if we do validation here.
+        const txInstance = Transaction.fromNetworkObject(obj);
+        const unsignedTxObject = txInstance.toNetworkObject(false);
+        const canonicalString = objectManager.toCanonicalString(unsignedTxObject);
+
+        for (const input of obj.inputs) {
+          if (!(await objectManager.exists(input.outpoint.txid))) {
             const error: ErrorMessageType = {
               type: 'error',
-              msg: `Invalid output: bad public key format ${output.pubkey}`,
+              msg: `Referenced txid not found: ${input.outpoint.txid}`,
+              name: 'UNKNOWN_OBJECT',
+            };
+            return { success: false, error };
+          }
+
+          let referencedTx: ObjectType = await objectManager.get(input.outpoint.txid);
+          const referencedOutput = (referencedTx as TransactionObjectType).outputs[
+            input.outpoint.index
+          ];
+          if (!referencedOutput) {
+            const error: ErrorMessageType = {
+              type: 'error',
+              msg: `Invalid outpoint: Index ${input.outpoint.index} is out of bounds for tx ${input.outpoint.txid}.`,
               name: 'INVALID_FORMAT',
             };
             return { success: false, error };
           }
-          if (!Number.isInteger(output.value) || output.value < 0) {
-            // This is the check your test is looking for
+          totalInputValue += referencedOutput.value;
+          // --- Step 2b: Verify Signature ---
+          const { sig } = input;
+          const { pubkey } = referencedOutput;
+
+          if (!sig || sig === '') {
             const error: ErrorMessageType = {
               type: 'error',
-              msg: `Invalid output: value must be a non-negative integer.`,
+              msg: `Input signature is missing for ${input.outpoint.txid}:${input.outpoint.index}`,
+              name: 'INVALID_FORMAT',
+            };
+            return { success: false, error };
+          }
+          if (!(await ver(canonicalString, sig, pubkey))) {
+            const error: ErrorMessageType = {
+              type: 'error',
+              msg: `Invalid signature for input ${input.outpoint.txid}:${input.outpoint.index}`,
+              name: 'INVALID_FORMAT',
+            };
+            return { success: false, error };
+          }
+
+          // --- Step 2d: Weak Law of Conservation ---
+          if (totalInputValue < totalOutputValue) {
+            const error: ErrorMessageType = {
+              type: 'error',
+              msg: `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
               name: 'INVALID_FORMAT',
             };
             return { success: false, error };
           }
         }
+        return ok;
+      }),
+
+      when(CoinbaseTransactionObject, async (_) => {
+        // For task 2 syntactically valid CoinbaseTransactionObjects are valid.
         return ok;
       }),
 

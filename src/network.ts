@@ -32,6 +32,10 @@ class Network {
       peerManager.peerDiscovered(remoteAddrWithPort);
     });
 
+    server.on('error', (err) => {
+      logger.error(`Server received an error: ${err}`);
+    });
+
     logger.info(`Listening for connections on port ${bindPort} and IP ${bindIP}`);
     server.listen(bindPort, bindIP);
 
@@ -108,7 +112,7 @@ export class MessageSocket extends EventEmitter {
   }
 
   sendMessage(message: string, callback?: (err?: Error) => void) {
-    if (this.netSocket.destroyed || this.netSocket.writableEnded) {
+    if (!this.netSocket.writable) {
       logger.warn(`Tried to write after socket closed`);
       return;
     }
@@ -117,7 +121,7 @@ export class MessageSocket extends EventEmitter {
   }
 
   end() {
-    this.netSocket.destroy();
+    this.netSocket.end();
     // TODO: Should anything else happen here?
   }
 }
