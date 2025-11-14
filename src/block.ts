@@ -64,7 +64,7 @@ export class Block {
    */
   async getCoinbase(): Promise<Transaction> {
     /* TODO */
-    return new Transaction();
+    return new Transaction([], undefined, 0);
   }
 
   hasPoW(): boolean {
