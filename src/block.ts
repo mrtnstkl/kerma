@@ -1,7 +1,7 @@
 import { BlockObject, BlockObjectType, TransactionObject, ObjectType, GeneralTransactionObject } from './message';
 import { hash } from './crypto/hash';
 import { Peer } from './peer';
-import { objectManager, ObjectId, db } from './object';
+import { objectManager, ObjectId, db, ValidationResult, ValidationResultType } from './object';
 import { UTXOSet } from './utxo';
 import { logger } from './logger';
 import { Transaction } from './transaction';
@@ -26,32 +26,24 @@ const BU = 10 ** 12;
 const BLOCK_REWARD = 50 * BU;
 
 export class BlockManager {
-  async get(blockid: ObjectId){
-      if(BlockObject.check(objectManager.get(blockid))){
-          return await objectManager.get(blockid);
-      } else {
-          throw new Error(`${blockid} is not a block object`);
-      }
+  async get(blockid: ObjectId) {
+    return BlockObject.check(objectManager.get(blockid));
   }
 
-  async del(blockid: ObjectId){
-      if(BlockObject.check(objectManager.get(blockid))){
-          return await objectManager.del(blockid);
-      } else {
-          throw new Error(`${blockid} is not a block object`);
-      }
+  async del(blockid: ObjectId) {
+    if (BlockObject.validate(objectManager.get(blockid)).success) {
+      await objectManager.del(blockid);
+    } else {
+      throw new Error(`${blockid} is not a block object`);
+    }
   }
 
-  async exists(blockid: ObjectId){
-      return await objectManager.exists(blockid);
+  async exists(blockid: ObjectId) {
+    return await objectManager.exists(blockid);
   }
 
-  async put(block: ObjectType){
-      if(BlockObject.check(block)){
-          return await objectManager.put(block);
-      } else {
-          throw new Error('Object is not a block object');
-      }
+  async put(block: BlockObjectType) {
+    return await objectManager.put(block);
   }
 }
 
@@ -202,10 +194,10 @@ export class Block {
 
   /**
    * Validate this block, throwing an error if validation failed
-   * @throws Error
    */
-  async validate(/* TODO */) {
-    /* TODO */
+  async validate(/* TODO */): Promise<ValidationResultType> {
+
+    return { success: true };
   }
 
   /**
