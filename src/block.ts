@@ -8,6 +8,7 @@ import { Transaction } from './transaction';
 import { chainManager } from './chain';
 import { Deferred } from './promise';
 import { Hash } from 'crypto';
+import {error} from "winston";
 
 const TARGET = '0000abc000000000000000000000000000000000000000000000000000000000'; /* TODO */
 const GENESIS: BlockObjectType = {
@@ -25,7 +26,33 @@ const BU = 10 ** 12;
 const BLOCK_REWARD = 50 * BU;
 
 export class BlockManager {
-  /* TODO */
+  async get(blockid: ObjectId){
+      if(BlockObject.check(objectManager.get(blockid))){
+          return await objectManager.get(blockid);
+      } else {
+          throw new Error(`${blockid} is not a block object`);
+      }
+  }
+
+  async del(blockid: ObjectId){
+      if(BlockObject.check(objectManager.get(blockid))){
+          return await objectManager.del(blockid);
+      } else {
+          throw new Error(`${blockid} is not a block object`);
+      }
+  }
+
+  async exists(blockid: ObjectId){
+      return await objectManager.exists(blockid);
+  }
+
+  async put(block: ObjectType){
+      if(BlockObject.check(block)){
+          return await objectManager.put(block);
+      } else {
+          throw new Error('Object is not a block object');
+      }
+  }
 }
 
 export const blockManager = new BlockManager();
