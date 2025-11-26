@@ -18,6 +18,7 @@ import { Peer } from './peer';
 import { Deferred, delay, resolveToReject } from './promise';
 import { mempool } from './mempool';
 import { Literal, match, Record, Static, Union, when } from 'runtypes';
+import { network } from './network';
 
 const envDatabaseDirectory = process.env.OBJECT_DATABASE_DIRECTORY;
 const databaseDirectory =
@@ -36,7 +37,8 @@ export type ValidationResultType = Static<typeof ValidationResult>;
  * Interfaces the database
  */
 class ObjectManager {
-  /* TODO */
+
+  objectRequests: Map<ObjectId, Set<Deferred<ObjectType>>> = new Map();
 
   /**
    * Clears all objects from the database
@@ -116,6 +118,10 @@ class ObjectManager {
     const objectid = this.id(object);
     logger.info(`Storing object ${objectid} in database`);
     await db.put('object:' + objectid, object);
+    for (const deferred of this.objectRequests.get(objectid) || []) {
+      deferred.resolve(object);
+    }
+    this.objectRequests.delete(objectid);
     return objectid;
   }
 
@@ -125,11 +131,40 @@ class ObjectManager {
    * @param peer the peer you want to get the object from
    * @returns the object, or rejects if not possible
    */
-  async retrieve(objectid: ObjectId, peer: Peer): Promise<Boolean> {
+  /*async retrieve(objectid: ObjectId, peer: Peer): Promise<Boolean> {
     // todo: Promise<ObjectType>
-    /* TODO */
     return true;
+  }*/
+
+  /**
+    * Attempts to retrieve an object from all connected peers
+   * 
+   * @param objectid the object to get
+   * @returns the object, or rejects if not possible
+   */
+  async getFromNetwork(objectid: ObjectId): Promise<ObjectType> {
+    // todo: two "problems":
+    // 1. currently, we broadcast the request to all peers. this is inefficient
+    // 2. when an object is not available, we always wait for the timeout instead of handling UNKNOWN_OBJECT
+    if (await this.exists(objectid)) {
+      return await this.get(objectid);
+    }
+    const deferred = new Deferred<ObjectType>();
+    if (this.objectRequests.has(objectid)) {
+      this.objectRequests.get(objectid)!.add(deferred);
+    } else {
+      this.objectRequests.set(objectid, new Set());
+      this.objectRequests.get(objectid)!.add(deferred);
+      network.peers.forEach(peer => peer.sendGetObject(objectid));
+    }
+    setTimeout(
+      () => deferred.reject(new Error(`Timeout getting object ${objectid} from network`)),
+      OBJECT_AVAILABILITY_TIMEOUT
+    );
+    const obj = await deferred.promise;
+    return obj;
   }
+
 }
 
 export const objectManager = new ObjectManager();
