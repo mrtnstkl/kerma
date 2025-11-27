@@ -321,14 +321,13 @@ export class Peer {
         network.broadcast(objectId);
       }),
       when(BlockObject, async (block) => {
-        this.debug(`Received block object which is not supported`);
         const blk = await Block.fromNetworkObject(block);
         const validation = await blk.validate();
         if (!validation.success) {
           this.debug(`Received block is invalid: ${validation.error.msg}`);
           return this.fatalError(validation.error.name, validation.error.msg);
         } else {
-          blockManager.put(block);
+          blockManager.put(blk);
         }
       }),
     )(msg.object);

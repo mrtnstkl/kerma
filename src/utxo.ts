@@ -39,4 +39,9 @@ export class UTXOSet {
   toString() {
     /* TODO */
   }
+
+  toArray(): string[] {
+    /* TODO */
+    return [];
+  }
 }

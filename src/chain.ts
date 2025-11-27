@@ -38,11 +38,11 @@ export class Chain {
    */
   static async getForks(b1: Block, b2: Block): Promise<[Block, Chain, Chain]> {
     /* TODO */
-    const lca = new Block();
-    const shortFork = new Block();
-    const longFork = new Block();
-
-    return [lca, shortFork, longFork];
+    throw new Error('Not implemented');
+    //const lca = new Block();
+    //const shortFork = new Block();
+    //const longFork = new Block();
+    //return [lca, shortFork, longFork];
   }
 }
 
