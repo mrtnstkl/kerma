@@ -130,6 +130,12 @@ export const ObjectMessage = Record({
 });
 export type ObjectMessageType = Static<typeof ObjectMessage>;
 
+export const ChainObject = Record({
+  tip: BlockObject,
+  height: Number,
+});
+export type ChainObjectType = Static<typeof ChainObject>;
+
 export const GetChainTipMessage = Record({
   type: Literal('getchaintip'),
   /* TODO: finish this type */

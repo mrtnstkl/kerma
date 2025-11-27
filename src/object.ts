@@ -37,7 +37,6 @@ export type ValidationResultType = Static<typeof ValidationResult>;
  * Interfaces the database
  */
 class ObjectManager {
-
   objectRequests: Map<ObjectId, Set<Deferred<ObjectType>>> = new Map();
 
   /**
@@ -137,8 +136,8 @@ class ObjectManager {
   }*/
 
   /**
-    * Attempts to retrieve an object from all connected peers
-   * 
+   * Attempts to retrieve an object from all connected peers
+   *
    * @param objectid the object to get
    * @returns the object, or rejects if not possible
    */
@@ -155,16 +154,15 @@ class ObjectManager {
     } else {
       this.objectRequests.set(objectid, new Set());
       this.objectRequests.get(objectid)!.add(deferred);
-      network.peers.forEach(peer => peer.sendGetObject(objectid));
+      network.peers.forEach((peer) => peer.sendGetObject(objectid));
     }
     setTimeout(
       () => deferred.reject(new Error(`Timeout getting object ${objectid} from network`)),
-      OBJECT_AVAILABILITY_TIMEOUT
+      OBJECT_AVAILABILITY_TIMEOUT,
     );
     const obj = await deferred.promise;
     return obj;
   }
-
 }
 
 export const objectManager = new ObjectManager();

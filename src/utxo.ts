@@ -30,7 +30,9 @@ export class UTXOSet {
     if (!tx.isCoinbase()) {
       for (const input of tx.inputs!) {
         if (!workingUtxoSet.delete(`${input.outpoint.txid}:${input.outpoint.index}`))
-          throw new Error(`UTXOSet apply: trying to spend non-existing outpoint ${input.outpoint.txid}:${input.outpoint.index}`);
+          throw new Error(
+            `UTXOSet apply: trying to spend non-existing outpoint ${input.outpoint.txid}:${input.outpoint.index}`,
+          );
       }
     }
     const txid = hash(objectManager.toCanonicalString(tx));

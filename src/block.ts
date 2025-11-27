@@ -1,4 +1,11 @@
-import { BlockObject, BlockObjectType, TransactionObject, ObjectType, GeneralTransactionObject, CoinbaseTransactionObject } from './message';
+import {
+  BlockObject,
+  BlockObjectType,
+  TransactionObject,
+  ObjectType,
+  GeneralTransactionObject,
+  CoinbaseTransactionObject,
+} from './message';
 import { hash } from './crypto/hash';
 import { Peer } from './peer';
 import { objectManager, ObjectId, db, ValidationResult, ValidationResultType } from './object';
@@ -8,8 +15,8 @@ import { Transaction } from './transaction';
 import { chainManager } from './chain';
 import { Deferred } from './promise';
 import { Hash } from 'crypto';
-import {error} from "winston";
-import { Array, Boolean, Record, Static, String } from 'runtypes';
+import { error } from 'winston';
+import { Array, Boolean, Number, Record, Static, String } from 'runtypes';
 
 const TARGET = '0000abc000000000000000000000000000000000000000000000000000000000'; /* TODO */
 const GENESIS: BlockObjectType = {
@@ -26,9 +33,8 @@ const GENESIS_HASH = hash(objectManager.toCanonicalString(GENESIS));
 const BU = 10 ** 12;
 const BLOCK_REWARD = 50 * BU;
 
-
 export class BlockManager {
-  async get(blockid: ObjectId) : Promise<Block> {
+  async get(blockid: ObjectId): Promise<Block> {
     const block = BlockObject.check(objectManager.get(blockid));
     let meta;
     if (await db.exists(`object:${blockid}:meta`)) {
@@ -47,12 +53,11 @@ export class BlockManager {
   }
 
   async exists(blockid: ObjectId) {
-    if (!await objectManager.exists(blockid))
-      return false;
+    if (!(await objectManager.exists(blockid))) return false;
     return BlockObject.validate(objectManager.get(blockid)).success;
   }
 
-  async put(block: Block) : Promise<ObjectId> {
+  async put(block: Block): Promise<ObjectId> {
     const blockObj = BlockObject.check({
       type: 'block',
       txids: block.txids,
@@ -78,39 +83,38 @@ export const blockManager = new BlockManager();
 export class BlockMeta {
   verified: boolean;
   utxoSet: UTXOSet;
+  height: number;
 
-  constructor(verified: boolean = false, utxoSet?: UTXOSet) {
+  constructor(verified: boolean = false, height: number, utxoSet?: UTXOSet) {
     this.verified = verified;
+    this.height = height;
     this.utxoSet = utxoSet ?? new UTXOSet(new Set());
   }
   static fromObject(obj: BlockMetaObjectType): BlockMeta {
-    return new BlockMeta(
-      obj.verified,
-      new UTXOSet(new Set(obj.utxoSet)),
-    );
+    return new BlockMeta(obj.verified, obj.height, new UTXOSet(new Set(obj.utxoSet)));
   }
 }
 
 const BlockMetaObject = Record({
   verified: Boolean,
+  height: Number,
   utxoSet: Array(String),
 });
 type BlockMetaObjectType = Static<typeof BlockMetaObject>;
-
 
 /**
  * Class used to represent a block
  */
 export class Block {
-  readonly t : ObjectId; // the mining target. a 32-byte hexadecimal integer
-  readonly created : number;
-  readonly miner? : string;
-  readonly nonce : string;
-  readonly note? : string;
-  readonly previd : ObjectId | null;
-  readonly txids : ObjectId[];
+  readonly t: ObjectId; // the mining target. a 32-byte hexadecimal integer
+  readonly created: number;
+  readonly miner?: string;
+  readonly nonce: string;
+  readonly note?: string;
+  readonly previd: ObjectId | null;
+  readonly txids: ObjectId[];
 
-  meta : BlockMeta = new BlockMeta(false);
+  meta: BlockMeta = new BlockMeta(false, 0);
 
   constructor(
     t: ObjectId,
@@ -146,7 +150,10 @@ export class Block {
    * @param object
    * @returns a Block object representing this block
    */
-  public static async fromNetworkObject(object: BlockObjectType, meta?: BlockMetaObjectType): Promise<Block> {
+  public static async fromNetworkObject(
+    object: BlockObjectType,
+    meta?: BlockMetaObjectType,
+  ): Promise<Block> {
     let block = new Block(
       object.T,
       object.created,
@@ -156,7 +163,7 @@ export class Block {
       object.previd,
       object.txids,
     );
-    block.meta = meta ? BlockMeta.fromObject(meta) : new BlockMeta(false);
+    block.meta = meta ? BlockMeta.fromObject(meta) : new BlockMeta(false, 0);
     await block.validate();
     return block;
   }
@@ -257,11 +264,14 @@ export class Block {
     }
 
     if (this.t !== TARGET) {
-      return { success: false, error: {
-        type: 'error',
-        name: 'INVALID_FORMAT',
-        msg: `Block target ${this.t} does not match expected target ${TARGET}`
-      }};
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'INVALID_FORMAT',
+          msg: `Block target ${this.t} does not match expected target ${TARGET}`,
+        },
+      };
     }
 
     return { success: true };
@@ -281,5 +291,4 @@ export class Block {
   /*async load() {
     // todo: remove this function? we use blockManager.get for this
   }*/
-
 }
