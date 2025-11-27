@@ -1,7 +1,8 @@
 import { Block } from './block';
+import { hash } from './crypto/hash';
 import { logger } from './logger';
 import { OutpointObject, OutpointObjectType } from './message';
-import { db, ObjectId } from './object';
+import { db, ObjectId, objectManager } from './object';
 import { Outpoint, Transaction } from './transaction';
 
 export type UTXO = Set<string>;
@@ -10,13 +11,13 @@ export type UTXO = Set<string>;
  * a class to represent the UTXO (unspent transaction output) set
  */
 export class UTXOSet {
-  /* TODO */
+  utxos: UTXO;
 
   constructor(outpoints: UTXO) {
-    /* TODO */
+    this.utxos = new Set(outpoints);
   }
   copy() {
-    /* TODO */
+    return new UTXOSet(new Set(this.utxos));
   }
 
   /**
@@ -25,7 +26,18 @@ export class UTXOSet {
    * @throws Error
    */
   async apply(tx: Transaction) {
-    /* TODO */
+    const workingUtxoSet = new Set(this.utxos);
+    if (!tx.isCoinbase()) {
+      for (const input of tx.inputs!) {
+        if (!workingUtxoSet.delete(`${input.outpoint.txid}:${input.outpoint.index}`))
+          throw new Error(`UTXOSet apply: trying to spend non-existing outpoint ${input.outpoint.txid}:${input.outpoint.index}`);
+      }
+    }
+    const txid = hash(objectManager.toCanonicalString(tx));
+    tx.outputs.forEach((output, index) => {
+      workingUtxoSet.add(`${txid}:${index}`);
+    });
+    this.utxos = workingUtxoSet;
   }
 
   /**
@@ -33,15 +45,18 @@ export class UTXOSet {
    * @throws Error
    */
   async applyMultiple(txs: Transaction[]) {
-    /* TODO */
+    const workingCopy = this.copy();
+    for (const tx of txs) {
+      await workingCopy.apply(tx);
+    }
+    this.utxos = workingCopy.utxos;
   }
 
   toString() {
-    /* TODO */
+    return Array.from(this.utxos).toString();
   }
 
   toArray(): string[] {
-    /* TODO */
-    return [];
+    return Array.from(this.utxos);
   }
 }
