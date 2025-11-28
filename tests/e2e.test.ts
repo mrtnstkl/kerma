@@ -68,7 +68,7 @@ class SocketWithBuffers {
 const startNode = (port?: number) => {
   const databaseDirectory = fs.mkdtempSync(path.join(tmpBase, 'kerma-'));
 
-  const portArguments = port === undefined ? [] : ['--port', port.toString()];
+  const portArguments = port === undefined ? [] : ['--', '--port', port.toString()];
 
   const proc = spawn('npm', [...['run', 'start'], ...portArguments], {
     env: { ...process.env, OBJECT_DATABASE_DIRECTORY: databaseDirectory },

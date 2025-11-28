@@ -164,7 +164,7 @@ export class Block {
       object.txids,
     );
     block.meta = meta ? BlockMeta.fromObject(meta) : new BlockMeta(false, 0);
-    await block.validate();
+    await block.validate(); // TODO: Should this happen here? If so then we should check the return type of it to see if there was an error
     return block;
   }
 
