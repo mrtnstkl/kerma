@@ -6,6 +6,7 @@ import { ChildProcess, spawn } from 'child_process';
 import { MessageSocket } from '../src/network';
 
 const DEFAULT_HOST = 'localhost:18018';
+const BLOCK_HOST = 'localhost:18019';
 
 const tmpBase = os.tmpdir();
 
@@ -64,10 +65,12 @@ class SocketWithBuffers {
   }
 }
 
-const startNode = () => {
+const startNode = (port?: number) => {
   const databaseDirectory = fs.mkdtempSync(path.join(tmpBase, 'kerma-'));
 
-  const proc = spawn('npm', ['run', 'start'], {
+  const portArguments = port === undefined ? [] : ['--port', port.toString()];
+
+  const proc = spawn('npm', [...['run', 'start'], ...portArguments], {
     env: { ...process.env, OBJECT_DATABASE_DIRECTORY: databaseDirectory },
     stdio: 'inherit',
     shell: true,
@@ -78,7 +81,8 @@ const startNode = () => {
 };
 
 beforeAll(async () => {
-  startNode();
+  startNode(); // For testing transactions
+  startNode(18019); // For testing blocks
 
   await new Promise((res) => setTimeout(res, 3000));
 });
@@ -160,7 +164,7 @@ test('saves object and sends it back', async () => {
   expect(grader1.receivedMessages.includes(coinbaseTransactionMessage));
   expect(
     grader2.receivedMessages.includes(
-      '{"type":"ihaveobject","d46d09138f0251edc32e28f1a744cb0b7286850e4c9c777d7e3c6e459b289347"}',
+      '{"type":"ihaveobject","objectid":"d46d09138f0251edc32e28f1a744cb0b7286850e4c9c777d7e3c6e459b289347"}',
     ),
   );
 
@@ -180,7 +184,7 @@ test('saves object and sends it back', async () => {
   expect(grader1.receivedMessages.includes(transactionMessage));
   expect(
     grader2.receivedMessages.includes(
-      '{"type":"ihaveobject","895ca2bea390b7508f780c7174900a631e73905dcdc6c07a6b61ede2ebd4033f"}',
+      '{"type":"ihaveobject","objectid":"895ca2bea390b7508f780c7174900a631e73905dcdc6c07a6b61ede2ebd4033f"}',
     ),
   );
 
@@ -268,3 +272,37 @@ test('reacts correctly to invalid transactions', async () => {
 // More test cases:
 // - object with given txid exists but is a block (INVALID_FORMAT) - for task 2 we are guaranteed, there will be no blocks, but TODO for future
 // - The referenced transaction is invalid (INVALID_ANCESTRY) - when does it happen???
+test('Valid block parsed succesfully and gossiped', async () => {
+  const grader1 = await SocketWithBuffers.create(BLOCK_HOST);
+
+  grader1.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_1"}');
+
+  const genesis =
+    '{"type":"object","object":{"T":"0000abc000000000000000000000000000000000000000000000000000000000","created":1671062400,"miner":"Marabu","nonce":"00000000000000000000000000000000000000000000000000000000005bb0f2","note":"The New York Times 2022−12−13: Scientists Achieve Nuclear Fusion Breakthrough With Blast of 192 Lasers","previd":null,"txids":[],"type":"block"}}';
+
+  grader1.sendMessage(genesis);
+
+  await new Promise((res) => setTimeout(res, 1000));
+
+  const coinbaseTx =
+    '{"type":"object","object":{"height":1,"outputs":[{"pubkey":"3f0bc71a375b574e4bda3ddf502fe1afd99aa020bf6049adfe525d9ad18ff33f","value":50000000000000}],"type":"transaction"}}';
+
+  grader1.sendMessage(coinbaseTx);
+
+  await new Promise((res) => setTimeout(res, 500));
+
+  const block1 =
+    '{"type":"object","object":{"T":"0000abc000000000000000000000000000000000000000000000000000000000","created":1671148800,"miner":"grader","nonce":"00000000000000000000000000000000000000000000000000000000000463cf","note":"This block has a coinbase transaction","previd":"00002fa163c7dab0991544424b9fd302bb1782b185e5a3bbdf12afb758e57dee","txids":["6ebfb4c8e8e9b19dcf54c6ce3e1e143da1f473ea986e70c5cb8899a4671c933a"],"type":"block"}}';
+
+  grader1.sendMessage(block1);
+
+  await new Promise((res) => setTimeout(res, 1000));
+
+  expect(grader1.receivedErrorMessage()).toBeFalsy();
+
+  expect(
+    grader1.receivedMessages.includes(
+      '{"type":"ihaveobject","objectid":"00004d07d79f728a27ee72334b17425b83e5d59e1f1abad46f9f1936eeb6a517"}',
+    ),
+  ).toBeTruthy();
+});
