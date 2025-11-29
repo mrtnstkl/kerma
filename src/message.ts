@@ -130,6 +130,12 @@ export const ObjectMessage = Record({
 });
 export type ObjectMessageType = Static<typeof ObjectMessage>;
 
+export const ChainObject = Record({
+  tip: BlockObject,
+  height: Number,
+});
+export type ChainObjectType = Static<typeof ChainObject>;
+
 export const GetChainTipMessage = Record({
   type: Literal('getchaintip'),
   /* TODO: finish this type */
@@ -154,13 +160,19 @@ export const MempoolMessage = Record({
 });
 export type MempoolMessageType = Static<typeof MempoolMessage>;
 
-export const ErrorCode = Union(
+const ErrorCode = Union(
   Literal('INVALID_FORMAT'),
   Literal('INVALID_HANDSHAKE'),
   Literal('UNKNOWN_OBJECT'),
-  Literal('INVALID_TX_SIGNATURE'),
   Literal('INVALID_TX_CONSERVATION'),
+  Literal('INVALID_TX_SIGNATURE'),
   Literal('INVALID_TX_OUTPOINT'),
+  Literal('INVALID_BLOCK_POW'),
+  Literal('INVALID_BLOCK_TIMESTAMP'),
+  Literal('INVALID_BLOCK_COINBASE'),
+  Literal('INVALID_GENESIS'),
+  Literal('UNFINDABLE_OBJECT'),
+  Literal('INVALID_ANCESTRY'),
 ); // TODO: Add rest of the error codes
 export type ErrorCodeType = Static<typeof ErrorCode>;
 

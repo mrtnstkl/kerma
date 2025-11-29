@@ -40,6 +40,7 @@ import { chainManager } from './chain';
 import { mempool } from './mempool';
 import { Transaction } from './transaction';
 import { match, when } from 'runtypes';
+import { Block, blockManager } from './block';
 
 const VERSION = '0.10.0';
 const NAME = 'b0b3r';
@@ -320,8 +321,17 @@ export class Peer {
         network.broadcast(objectId);
       }),
       when(BlockObject, async (block) => {
-        this.debug(`Received block object which is not supported`);
-        await this.fatalError('INVALID_FORMAT', 'Block object is not supported');
+        const blk = await Block.fromNetworkObject(block);
+        const validation = await blk.validate();
+        if (!validation.success) {
+          this.debug(`Received block is invalid: ${validation.error.msg}`);
+          return this.fatalError(validation.error.name, validation.error.msg);
+        } else {
+          // store the block
+          blockManager.put(blk);
+          // gossip to other peers
+          network.broadcast(blk.hash());
+        }
       }),
     )(msg.object);
   }
