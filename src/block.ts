@@ -141,7 +141,8 @@ export class Block {
   public static async makeGenesis(): Promise<Block> {
     const block = await Block.fromNetworkObject(GENESIS);
     block.meta.verified = true;
-    // todo: compute utxoSet for genesis
+    block.meta.height = 0;
+    // utxo set remains empty, since our genesis block has no transactions
     return block;
   }
 
@@ -256,6 +257,22 @@ export class Block {
    */
   async validate(): Promise<ValidationResultType> {
     this.meta.verified = false;
+
+    const transactions = await this.getTxs();
+    const utxoSet = new UTXOSet(new Set());
+    try {
+      await utxoSet.applyMultiple(transactions);
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'INVALID_TX_CONSERVATION',
+          msg: `Block ${this.hash()} violates transaction conservation: ${error}`,
+        }
+      };
+    }
+    this.meta.utxoSet = utxoSet;
 
     if (this.isGenesis()) {
       this.meta.verified = true;
