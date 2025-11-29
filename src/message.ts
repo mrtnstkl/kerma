@@ -160,14 +160,20 @@ export const MempoolMessage = Record({
 });
 export type MempoolMessageType = Static<typeof MempoolMessage>;
 
-export const ErrorCode = Union(
+const ErrorCode = Union(
   Literal('INVALID_FORMAT'),
   Literal('INVALID_HANDSHAKE'),
   Literal('UNKNOWN_OBJECT'),
-  Literal('INVALID_TX_SIGNATURE'),
   Literal('INVALID_TX_CONSERVATION'),
+  Literal('INVALID_TX_SIGNATURE'),
   Literal('INVALID_TX_OUTPOINT'),
-); // TODO: Add rest of the error codes
+  Literal('INVALID_BLOCK_POW'),
+  Literal('INVALID_BLOCK_TIMESTAMP'),
+  Literal('INVALID_BLOCK_COINBASE'),
+  Literal('INVALID_GENESIS'),
+  Literal('UNFINDABLE_OBJECT'),
+  Literal('INVALID_ANCESTRY')
+) // TODO: Add rest of the error codes
 export type ErrorCodeType = Static<typeof ErrorCode>;
 
 export const ErrorMessage = Record({
