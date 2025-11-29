@@ -327,7 +327,10 @@ export class Peer {
           this.debug(`Received block is invalid: ${validation.error.msg}`);
           return this.fatalError(validation.error.name, validation.error.msg);
         } else {
+          // store the block
           blockManager.put(blk);
+          // gossip to other peers
+          network.broadcast(blk.hash());
         }
       }),
     )(msg.object);
