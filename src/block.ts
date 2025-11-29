@@ -269,7 +269,7 @@ export class Block {
           type: 'error',
           name: 'INVALID_TX_CONSERVATION',
           msg: `Block ${this.hash()} violates transaction conservation: ${error}`,
-        }
+        },
       };
     }
     this.meta.utxoSet = utxoSet;
@@ -292,5 +292,4 @@ export class Block {
 
     return { success: true };
   }
-
 }

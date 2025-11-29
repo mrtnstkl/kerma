@@ -172,8 +172,8 @@ const ErrorCode = Union(
   Literal('INVALID_BLOCK_COINBASE'),
   Literal('INVALID_GENESIS'),
   Literal('UNFINDABLE_OBJECT'),
-  Literal('INVALID_ANCESTRY')
-) // TODO: Add rest of the error codes
+  Literal('INVALID_ANCESTRY'),
+); // TODO: Add rest of the error codes
 export type ErrorCodeType = Static<typeof ErrorCode>;
 
 export const ErrorMessage = Record({
