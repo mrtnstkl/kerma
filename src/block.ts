@@ -164,7 +164,6 @@ export class Block {
       object.txids,
     );
     block.meta = meta ? BlockMeta.fromObject(meta) : new BlockMeta(false, 0);
-    await block.validate(); // TODO: Should this happen here? If so then we should check the return type of it to see if there was an error
     return block;
   }
 
@@ -277,18 +276,4 @@ export class Block {
     return { success: true };
   }
 
-  /**
-   * save this block (alongside meta information) in the database
-   */
-  async save() {
-    // todo: remove this function? it is redundant with blockManager.put
-    await blockManager.put(this);
-  }
-
-  /**
-   * load this block data and meta information
-   */
-  /*async load() {
-    // todo: remove this function? we use blockManager.get for this
-  }*/
 }
