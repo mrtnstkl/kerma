@@ -393,6 +393,8 @@ export class Block {
       };
     }
 
+    this.meta.height = previousBlock.meta.height + 1;
+
     //Check that no transaction spends from an in-block coinbase transaction
     if (coinbaseTransactions.length === 1) {
       const coinbaseTxid = this.txids[0]; // guaranteed true by earlier check
@@ -403,7 +405,7 @@ export class Block {
           error: {
             type: 'error',
             name: 'INVALID_BLOCK_COINBASE',
-            msg: `Coinbase height ${coinbaseTx.height} matches block height ${this.meta.height}`,
+            msg: `Coinbase height ${coinbaseTx.height} does not match block height ${this.meta.height}`,
           },
         };
       }
