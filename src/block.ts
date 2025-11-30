@@ -340,7 +340,7 @@ export class Block {
         success: false,
         error: {
           type: 'error',
-          name: 'INVALID_FORMAT', // TODO: This might have to be a different error
+          name: 'UNFINDABLE_OBJECT',
           msg: `Could not find previous block.`,
         },
       };
