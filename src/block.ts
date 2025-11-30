@@ -318,7 +318,20 @@ export class Block {
       };
     }
 
-    const previousBlock = await blockManager.get(this.previd!);
+    let previousBlock: Block;
+
+    try {
+      previousBlock = await blockManager.get(this.previd!);
+    } catch {
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'INVALID_FORMAT', // TODO: This might have to be a different error
+          msg: `Could not find previous block.`,
+        },
+      };
+    }
 
     const utxoSet = previousBlock.meta.utxoSet.copy();
     try {
