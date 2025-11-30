@@ -85,6 +85,10 @@ export class Outpoint {
       );
     }
 
+    if (tx.type !== 'transaction') {
+      throw new Error(`Referenced object ${this.txid} is not a transaction.`);
+    }
+
     const outputData = tx.outputs[this.index];
     if (!outputData) {
       throw new InvalidOutpointError(

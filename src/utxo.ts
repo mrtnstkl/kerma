@@ -35,7 +35,7 @@ export class UTXOSet {
           );
       }
     }
-    const txid = hash(objectManager.toCanonicalString(tx));
+    const txid = hash(objectManager.toCanonicalString(tx.toNetworkObject()));
     tx.outputs.forEach((output, index) => {
       workingUtxoSet.add(`${txid}:${index}`);
     });

@@ -380,7 +380,8 @@ test('Run external tests', async () => {
     };
 
     const canonical = toCanonicalString(obj);
-    return crypto.createHash('sha256').update(canonical).digest('hex');
+    //return crypto.createHash('sha256').update(canonical).digest('hex');
+    return crypto.createHash('BLAKE2s256').update(canonical).digest('hex');
   };
 
   for (const testFile of testFiles) {

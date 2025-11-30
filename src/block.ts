@@ -291,6 +291,17 @@ export class Block {
       };
     }
 
+    if (!this.hasPoW()) {
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'INVALID_BLOCK_POW',
+          msg: `Block ${this.hash()} does not meet protocol difficulty`,
+        },
+      };
+    }
+
     if (this.isGenesis()) {
       if (this.hash() !== GENESIS_HASH) {
         return {
@@ -346,24 +357,16 @@ export class Block {
       };
     }
 
-    const utxoSet = previousBlock.meta.utxoSet.copy();
-    try {
-      await utxoSet.applyMultiple(
-        transactions.map((transaction) => {
-          return transaction.tx;
-        }),
-      );
-    } catch (error) {
+    if (this.created <= previousBlock.created) {
       return {
         success: false,
         error: {
           type: 'error',
-          name: 'INVALID_TX_CONSERVATION',
-          msg: `Block ${this.hash()} violates transaction conservation: ${error}`,
+          name: 'INVALID_BLOCK_TIMESTAMP',
+          msg: 'Block timestamp must be greater than parent timestamp',
         },
       };
     }
-    this.meta.utxoSet = utxoSet;
 
     // Exactly 0 or 1 coinbase transactions allowed
     const coinbaseTransactions = this.getCoinbaseTransactions(transactions.map((tx) => tx.tx));
@@ -379,15 +382,27 @@ export class Block {
     }
 
     // If coinbase exists, it must be at index 0
-    if (coinbaseTransactions.length === 1 && coinbaseTransactions[0].index !== 0) {
-      return {
-        success: false,
-        error: {
-          type: 'error',
-          name: 'INVALID_BLOCK_COINBASE',
-          msg: `Block ${this.hash()} contains coinbase transaction at index ${coinbaseTransactions[0].index}, expected 0`,
-        },
-      };
+    if (coinbaseTransactions.length === 1) {
+      const coinbaseTx = coinbaseTransactions[0].transaction;
+      if (coinbaseTx.height != this.meta.height) {
+        return {
+          success: false,
+          error: {
+            type: 'error',
+            name: 'INVALID_BLOCK_COINBASE',
+            msg: `Coinbase height ${coinbaseTx.height} matches block height ${this.meta.height}`,
+          },
+        };
+      } else if (coinbaseTransactions[0].index !== 0) {
+        return {
+          success: false,
+          error: {
+            type: 'error',
+            name: 'INVALID_BLOCK_COINBASE',
+            msg: `Block ${this.hash()} contains coinbase transaction at index ${coinbaseTransactions[0].index}, expected 0`,
+          },
+        };
+      }
     }
 
     //Check that no transaction spends from an in-block coinbase transaction
@@ -403,7 +418,7 @@ export class Block {
               success: false,
               error: {
                 type: 'error',
-                name: 'INVALID_BLOCK_COINBASE',
+                name: 'INVALID_TX_OUTPOINT',
                 msg: `Transaction ${txid} spends from in-block coinbase ${coinbaseTxid}`,
               },
             };
@@ -434,6 +449,25 @@ export class Block {
         },
       };
     }
+
+    const utxoSet = previousBlock.meta.utxoSet.copy();
+    try {
+      await utxoSet.applyMultiple(
+        transactions.map((transaction) => {
+          return transaction.tx;
+        }),
+      );
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'INVALID_TX_CONSERVATION',
+          msg: `Block ${this.hash()} violates transaction conservation: ${error}`,
+        },
+      };
+    }
+    this.meta.utxoSet = utxoSet;
 
     return { success: true };
   }
