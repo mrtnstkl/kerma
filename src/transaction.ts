@@ -77,19 +77,31 @@ export class Outpoint {
   async resolve(): Promise<Output> {
     let tx: GeneralTransactionObjectType;
 
+    let invalidType = false;
+
     try {
-      tx = (await objectManager.get(this.txid)) as GeneralTransactionObjectType;
+      const txCandidate = GeneralTransactionObject.validate(await objectManager.get(this.txid));
+
+      if (txCandidate.success) {
+        tx = txCandidate.value;
+      } else {
+        invalidType = true;
+      }
     } catch {
       throw new ObjectNotFoundError(
         `UNKNOWN_OBJECT: Transaction ${this.txid} not found in database.`,
       );
     }
 
-    if (tx.type !== 'transaction') {
+    if (invalidType) {
+      throw new Error('Expected transaction, got block.');
+    }
+
+    if (tx!.type !== 'transaction') {
       throw new Error(`Referenced object ${this.txid} is not a transaction.`);
     }
 
-    const outputData = tx.outputs[this.index];
+    const outputData = tx!.outputs[this.index];
     if (!outputData) {
       throw new InvalidOutpointError(
         `Invalid outpoint: Index ${this.index} is out of bounds for tx ${this.txid}.`,

@@ -463,7 +463,7 @@ export class Block {
         success: false,
         error: {
           type: 'error',
-          name: 'INVALID_TX_CONSERVATION',
+          name: 'INVALID_TX_OUTPOINT',
           msg: `Block ${this.hash()} violates transaction conservation: ${error}`,
         },
       };
