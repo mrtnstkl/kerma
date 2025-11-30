@@ -232,12 +232,16 @@ export class Block {
 
     await Promise.all(
       this.txids.map(async (txid) => {
-        const txObj = GeneralTransactionObject.check(await objectManager.getFromNetwork(txid));
-        const tx = Transaction.fromNetworkObject(txObj);
-        results.push({ txid, tx });
+        const txObjFromNetwork = await objectManager.getFromNetwork(txid);
+        try {
+          const txObj = GeneralTransactionObject.check(txObjFromNetwork);
+          const tx = Transaction.fromNetworkObject(txObj);
+          results.push({ txid, tx });
+        } catch (e) {
+          throw new Error('INVALID_FORMAT error during transaction fetching');
+        }
       }),
     );
-
     return results;
   }
 
@@ -307,7 +311,16 @@ export class Block {
     try {
       transactions = await this.getTxs();
     } catch (e) {
-      // TODO: Possibly more errors could be thrown here. Take a look at it!
+      if (e instanceof Error && e.message == 'INVALID_FORMAT error during transaction fetching') {
+        return {
+          success: false,
+          error: {
+            type: 'error',
+            name: 'INVALID_FORMAT',
+            msg: `One or more transactions had invalid format: Message: ${e.message}`,
+          },
+        };
+      }
       return {
         success: false,
         error: {
