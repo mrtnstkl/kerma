@@ -183,18 +183,16 @@ export class Block {
     return Transaction.fromNetworkObject(txObj);
   }
 
-  async getCoinbaseTransactions(): Promise<{ transaction: Transaction; index: number }[]> {
+  async getCoinbaseTransactions(
+    transactions: Transaction[],
+  ): Promise<{ transaction: Transaction; index: number }[]> {
     const coinbaseTxs: { transaction: Transaction; index: number }[] = [];
-    for (const txid of this.txids) {
-      const netObj = await objectManager.getFromNetwork(txid);
-      try {
-        const txObj = CoinbaseTransactionObject.check(netObj);
+    for (const tx of transactions) {
+      if (tx.isCoinbase()) {
         coinbaseTxs.push({
-          transaction: Transaction.fromNetworkObject(txObj),
-          index: this.txids.indexOf(txid),
+          transaction: tx,
+          index: transactions.indexOf(tx),
         });
-      } catch (err) {
-        //No coinbaseTx: ignore
       }
     }
     return coinbaseTxs;
@@ -314,7 +312,7 @@ export class Block {
     }
 
     // Exactly 0 or 1 coinbase transactions allowed
-    const coinbaseTransactions = await this.getCoinbaseTransactions();
+    const coinbaseTransactions = await this.getCoinbaseTransactions(transactions.map((x) => x.tx));
     if (coinbaseTransactions.length > 1) {
       return {
         success: false,
