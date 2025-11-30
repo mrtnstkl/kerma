@@ -7,6 +7,7 @@ import { MessageSocket } from '../src/network';
 
 const DEFAULT_HOST = 'localhost:18018';
 const BLOCK_HOST = 'localhost:18019';
+const BLOCK_HOST_INCORRECT = 'localhost:18020';
 
 const tmpBase = os.tmpdir();
 
@@ -71,7 +72,7 @@ const startNode = (port?: number) => {
   const portArguments = port === undefined ? [] : ['--', '--port', port.toString()];
 
   const proc = spawn('npm', [...['run', 'start'], ...portArguments], {
-    env: { ...process.env, OBJECT_DATABASE_DIRECTORY: databaseDirectory },
+    env: { ...process.env, OBJECT_DATABASE_DIRECTORY: databaseDirectory, NO_BOOTSTRAP_PEERS: '1' },
     stdio: 'inherit',
     shell: true,
   });
@@ -83,6 +84,7 @@ const startNode = (port?: number) => {
 beforeAll(async () => {
   startNode(); // For testing transactions
   startNode(18019); // For testing blocks
+  startNode(18020); // For testing incorrect blocks
 
   await new Promise((res) => setTimeout(res, 3000));
 });
@@ -269,6 +271,44 @@ test('reacts correctly to invalid transactions', async () => {
   expect(grader5.receivedMessages.some((message) => message.includes('ihaveobject'))).toBeFalsy();
 }, 20000);
 
+test('Invalid block fails', async () => {
+  const grader1 = await SocketWithBuffers.create(BLOCK_HOST_INCORRECT);
+  const grader2 = await SocketWithBuffers.create(BLOCK_HOST_INCORRECT);
+  const grader3 = await SocketWithBuffers.create(BLOCK_HOST_INCORRECT);
+  const grader4 = await SocketWithBuffers.create(BLOCK_HOST_INCORRECT);
+  const grader5 = await SocketWithBuffers.create(BLOCK_HOST_INCORRECT);
+
+  grader1.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_1"}');
+  grader2.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_2"}');
+  grader3.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_3"}');
+  grader4.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_4"}');
+  grader5.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_5"}');
+
+  const incorrectGenesis =
+    '{"type":"object","object":{"T":"0000abcd00000000000000000000000000000000000000000000000000000000","created":1671062400,"miner":"Marabu","nonce":"00000000000000000000000000000000000000000000000000000000005bb0f2","note":"The New York Times 2022-12-13: Scientists Achieve Nuclear Fusion Breakthrough With Blast of 192 Lasers","previd":null,"txids":[],"type":"block"}}';
+
+  grader1.sendMessage(incorrectGenesis);
+
+  const correctGenesis =
+    '{"type":"object","object":{"T":"0000abc000000000000000000000000000000000000000000000000000000000","created":1671062400,"miner":"Marabu","nonce":"00000000000000000000000000000000000000000000000000000000005bb0f2","note":"The New York Times 2022-12-13: Scientists Achieve Nuclear Fusion Breakthrough With Blast of 192 Lasers","previd":null,"txids":[],"type":"block"}}';
+
+  grader2.sendMessage(correctGenesis);
+  grader3.sendMessage(correctGenesis);
+  grader4.sendMessage(correctGenesis);
+  grader5.sendMessage(correctGenesis);
+
+  const block1Correct =
+    '{"type":"object","object":{"T":"0000abc000000000000000000000000000000000000000000000000000000000","created":1671148800,"miner":"grader","nonce":"00000000000000000000000000000000000000000000000000000000000463cf","note":"This block has a coinbase transaction","previd":"00002fa163c7dab0991544424b9fd302bb1782b185e5a3bbdf12afb758e57dee","txids":["6ebfb4c8e8e9b19dcf54c6ce3e1e143da1f473ea986e70c5cb8899a4671c933a"],"type":"block"}}';
+
+  grader2.sendMessage(block1Correct);
+
+  await new Promise((res) => setTimeout(res, 6000));
+
+  expect(grader1.receivedErrorMessage('INVALID_FORMAT')).toBeTruthy();
+  expect(grader2.receivedErrorMessage('UNFINDABLE_OBJECT')).toBeTruthy();
+  expect(grader2.socket.netSocket.writable).toBeTruthy(); // After UNFINDABLE_OBJECT was returned, the peer should not be considered faulty.
+}, 20000);
+
 // More test cases:
 // - object with given txid exists but is a block (INVALID_FORMAT) - for task 2 we are guaranteed, there will be no blocks, but TODO for future
 // - The referenced transaction is invalid (INVALID_ANCESTRY) - when does it happen???
@@ -278,7 +318,7 @@ test('Valid block parsed succesfully and gossiped', async () => {
   grader1.sendMessage('{"type":"hello","version":"0.10.0","agent":"grader_1"}');
 
   const genesis =
-    '{"type":"object","object":{"T":"0000abc000000000000000000000000000000000000000000000000000000000","created":1671062400,"miner":"Marabu","nonce":"00000000000000000000000000000000000000000000000000000000005bb0f2","note":"The New York Times 2022−12−13: Scientists Achieve Nuclear Fusion Breakthrough With Blast of 192 Lasers","previd":null,"txids":[],"type":"block"}}';
+    '{"type":"object","object":{"T":"0000abc000000000000000000000000000000000000000000000000000000000","created":1671062400,"miner":"Marabu","nonce":"00000000000000000000000000000000000000000000000000000000005bb0f2","note":"The New York Times 2022-12-13: Scientists Achieve Nuclear Fusion Breakthrough With Blast of 192 Lasers","previd":null,"txids":[],"type":"block"}}';
 
   grader1.sendMessage(genesis);
 
@@ -302,7 +342,18 @@ test('Valid block parsed succesfully and gossiped', async () => {
 
   expect(
     grader1.receivedMessages.includes(
-      '{"type":"ihaveobject","objectid":"00004d07d79f728a27ee72334b17425b83e5d59e1f1abad46f9f1936eeb6a517"}',
+      '{"type":"ihaveobject","objectid":"6ebfb4c8e8e9b19dcf54c6ce3e1e143da1f473ea986e70c5cb8899a4671c933a"}',
+    ),
+  ).toBeTruthy();
+
+  expect(
+    grader1.receivedMessages.includes(
+      '{"type":"ihaveobject","objectid":"00002fa163c7dab0991544424b9fd302bb1782b185e5a3bbdf12afb758e57dee"}',
+    ),
+  ).toBeTruthy();
+  expect(
+    grader1.receivedMessages.includes(
+      '{"type":"ihaveobject","objectid":"000020cb0002575a71955763adf365c78182f0bb5bee767794ebc7346e0a2194"}',
     ),
   ).toBeTruthy();
 });

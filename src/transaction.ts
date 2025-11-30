@@ -295,6 +295,20 @@ export class Transaction {
     return this.inputs.map((input) => input.toUnsigned());
   }
 
+  async getFee(): Promise<number> {
+    if (this.inputs === undefined) {
+      throw new Error('Coinbase transaction has no fees');
+    }
+
+    const totalOutputValue = this.outputs.reduce((total, output) => total + output.value, 0);
+
+    const inputs = await Promise.all(this.inputs.map((input) => input.outpoint.resolve()));
+
+    const totalInputValue = inputs.reduce((total, input) => total + input.value, 0);
+
+    return totalInputValue - totalOutputValue;
+  }
+
   toNetworkObject(signed: boolean = true): GeneralTransactionObjectType {
     const outputs = this.outputs.map((output) => output.toNetworkObject());
 

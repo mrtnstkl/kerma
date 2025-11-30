@@ -325,6 +325,12 @@ export class Peer {
         const validation = await blk.validate();
         if (!validation.success) {
           this.debug(`Received block is invalid: ${validation.error.msg}`);
+
+          // Some errors should not be fatal
+          if (validation.error.name === 'UNFINDABLE_OBJECT') {
+            return this.sendError(validation.error.name, validation.error.msg);
+          }
+
           return this.fatalError(validation.error.name, validation.error.msg);
         } else {
           // store the block

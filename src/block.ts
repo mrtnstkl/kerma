@@ -17,6 +17,7 @@ import { Deferred } from './promise';
 import { Hash } from 'crypto';
 import { error } from 'winston';
 import { Array, Boolean, Number, Record, Static, String } from 'runtypes';
+import assert from 'assert';
 
 const TARGET = '0000abc000000000000000000000000000000000000000000000000000000000'; /* TODO */
 const GENESIS: BlockObjectType = {
@@ -29,13 +30,13 @@ const GENESIS: BlockObjectType = {
   txids: [],
   type: 'block',
 };
-const GENESIS_HASH = hash(objectManager.toCanonicalString(GENESIS));
+const GENESIS_HASH = '00002fa163c7dab0991544424b9fd302bb1782b185e5a3bbdf12afb758e57dee';
 const BU = 10 ** 12;
 const BLOCK_REWARD = 50 * BU;
 
 export class BlockManager {
   async get(blockid: ObjectId): Promise<Block> {
-    const block = BlockObject.check(objectManager.get(blockid));
+    const block = BlockObject.check(await objectManager.get(blockid));
     let meta;
     if (await db.exists(`object:${blockid}:meta`)) {
       meta = BlockMetaObject.check(await db.get(`object:${blockid}:meta`));
@@ -71,6 +72,7 @@ export class BlockManager {
     const blockid = objectManager.put(blockObj);
     const blockMetaObj = BlockMetaObject.check({
       verified: block.meta.verified,
+      height: block.meta.height,
       utxoSet: block.meta.utxoSet.toArray(),
     });
     await db.put(`object:${blockid}:meta`, blockMetaObj);
@@ -200,17 +202,16 @@ export class Block {
 
   hash(): string {
     const blockObject = BlockObject.check({
-      type: 'block',
-      txids: this.txids,
-      nonce: this.nonce,
-      previd: this.previd,
-      created: this.created,
       T: this.t,
+      created: this.created,
       miner: this.miner,
+      nonce: this.nonce,
       note: this.note,
+      previd: this.previd,
+      txids: this.txids,
+      type: 'block',
     });
-    const canonical = objectManager.toCanonicalString(blockObject);
-    return hash(canonical);
+    return objectManager.id(blockObject);
   }
 
   hasPoW(): boolean {
@@ -218,7 +219,7 @@ export class Block {
   }
 
   isGenesis(): boolean {
-    return this.hash() === GENESIS_HASH;
+    return this.previd === null;
   }
 
   /**
@@ -275,8 +276,51 @@ export class Block {
   async validate(): Promise<ValidationResultType> {
     this.meta.verified = false;
 
-    const transactions = await this.getTxs();
-    const utxoSet = new UTXOSet(new Set());
+    if (this.t !== TARGET) {
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'INVALID_FORMAT',
+          msg: `Block target ${this.t} does not match expected target ${TARGET}`,
+        },
+      };
+    }
+
+    if (this.isGenesis()) {
+      if (this.hash() !== GENESIS_HASH) {
+        return {
+          success: false,
+          error: {
+            type: 'error',
+            name: 'INVALID_GENESIS',
+            msg: 'Block other than genesis block with previd set to null',
+          },
+        };
+      }
+
+      this.meta.verified = true;
+      return { success: true };
+    }
+
+    let transactions: { tx: Transaction; txid: string }[];
+    try {
+      transactions = await this.getTxs();
+    } catch (e) {
+      // TODO: Possibly more errors could be thrown here. Take a look at it!
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'UNFINDABLE_OBJECT',
+          msg: 'Could not get all transactions',
+        },
+      };
+    }
+
+    const previousBlock = await blockManager.get(this.previd!);
+
+    const utxoSet = previousBlock.meta.utxoSet.copy();
     try {
       await utxoSet.applyMultiple(
         transactions.map((transaction) => {
@@ -295,24 +339,10 @@ export class Block {
     }
     this.meta.utxoSet = utxoSet;
 
-    if (this.isGenesis()) {
-      this.meta.verified = true;
-      return { success: true };
-    }
-
-    if (this.t !== TARGET) {
-      return {
-        success: false,
-        error: {
-          type: 'error',
-          name: 'INVALID_FORMAT',
-          msg: `Block target ${this.t} does not match expected target ${TARGET}`,
-        },
-      };
-    }
-
     // Exactly 0 or 1 coinbase transactions allowed
-    const coinbaseTransactions = this.getCoinbaseTransactions(transactions.map((x) => x.tx));
+    const coinbaseTransactions = await this.getCoinbaseTransactions(
+      transactions.map((tx) => tx.tx),
+    );
     if (coinbaseTransactions.length > 1) {
       return {
         success: false,
@@ -358,6 +388,35 @@ export class Block {
       }
     }
 
+    let totalFees: number;
+
+    // Verify law of conservation for the coinbase transaction.
+    //
+    // This assumes all previous validation steps were performed correctly.
+    try {
+      totalFees = await Block.calculateFees(transactions.map((tx) => tx.tx).slice(1));
+    } catch (e) {
+      // Analyze if it's the case, and replace it with throwing an error
+      assert(false, 'All validation should happen before');
+    }
+
+    if (transactions[0].tx.outputs[0].value > totalFees + BLOCK_REWARD) {
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'INVALID_BLOCK_COINBASE',
+          msg: 'Coinbase transaction in the block creates more coins than allowed.',
+        },
+      };
+    }
+
     return { success: true };
+  }
+
+  static async calculateFees(transactions: Transaction[]): Promise<number> {
+    const fees = await Promise.all(transactions.map((tx) => tx.getFee()));
+
+    return fees.reduce((total, fee) => total + fee, 0);
   }
 }

@@ -51,7 +51,7 @@ export type TransactionOutputObjectType = Static<typeof TransactionOutputObject>
 export const CoinbaseTransactionObject = Record({
   type: Literal('transaction'),
   height: NonNegative,
-  outputs: Array(TransactionOutputObject),
+  outputs: Array(TransactionOutputObject).withConstraint((array) => array.length === 1),
 });
 export type CoinbaseTransactionObjectType = Static<typeof CoinbaseTransactionObject>;
 

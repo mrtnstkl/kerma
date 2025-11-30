@@ -3,7 +3,9 @@ import { logger } from './logger';
 import isValidHostname from 'is-valid-hostname';
 import * as rt from 'runtypes';
 
-const BOOTSTRAP_PEERS: string[] = ['128.130.122.73:18018'];
+const noBootstrapOption = parseInt(process.env.NO_BOOTSTRAP_PEERS ?? '0');
+
+const BOOTSTRAP_PEERS: string[] = noBootstrapOption === 1 ? [] : ['128.130.122.73:18018'];
 
 class PeerManager {
   knownPeers: Set<string> = new Set();

@@ -38,12 +38,27 @@ test('genesis block has correct id', () => {
     previd: null,
   };
 
+  const nonGenesisBlock = {
+    T: '0000abc000000000000000000000000000000000000000000000000000000000',
+    created: 1671148800,
+    miner: 'grader',
+    nonce: '00000000000000000000000000000000000000000000000000000000000463cf',
+    note: 'This block has a coinbase transaction',
+    previd: '00002fa163c7dab0991544424b9fd302bb1782b185e5a3bbdf12afb758e57dee',
+    txids: ['6ebfb4c8e8e9b19dcf54c6ce3e1e143da1f473ea986e70c5cb8899a4671c933a'],
+    type: 'block',
+  };
+
   expect(objectManager.id(genesisBlock1)).toBe(
     '00002fa163c7dab0991544424b9fd302bb1782b185e5a3bbdf12afb758e57dee',
   );
 
   expect(objectManager.id(genesisBlock2)).toBe(
     '00002fa163c7dab0991544424b9fd302bb1782b185e5a3bbdf12afb758e57dee',
+  );
+
+  expect(objectManager.id(nonGenesisBlock)).toBe(
+    '000020cb0002575a71955763adf365c78182f0bb5bee767794ebc7346e0a2194',
   );
 });
 
