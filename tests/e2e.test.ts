@@ -7,7 +7,7 @@ import { MessageSocket } from '../src/network';
 
 const DEFAULT_HOST = 'localhost:18018';
 const BLOCK_HOST = 'localhost:18019';
-const BLOCK_HOST_INCORRECT = 'localhost:18019';
+const BLOCK_HOST_INCORRECT = 'localhost:18020';
 
 const tmpBase = os.tmpdir();
 
@@ -342,10 +342,15 @@ test('Valid block parsed succesfully and gossiped', async () => {
 
   expect(
     grader1.receivedMessages.includes(
-      '{"type":"ihaveobject","objectid":"00002fa163c7dab0991544424b9fd302bb1782b185e5a3bbdf12afb758e57dee"}',
+      '{"type":"ihaveobject","objectid":"6ebfb4c8e8e9b19dcf54c6ce3e1e143da1f473ea986e70c5cb8899a4671c933a"}',
     ),
   ).toBeTruthy();
 
+  expect(
+    grader1.receivedMessages.includes(
+      '{"type":"ihaveobject","objectid":"00002fa163c7dab0991544424b9fd302bb1782b185e5a3bbdf12afb758e57dee"}',
+    ),
+  ).toBeTruthy();
   expect(
     grader1.receivedMessages.includes(
       '{"type":"ihaveobject","objectid":"000020cb0002575a71955763adf365c78182f0bb5bee767794ebc7346e0a2194"}',
