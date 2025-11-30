@@ -185,6 +185,7 @@ export class Block {
     return Transaction.fromNetworkObject(txObj);
   }
 
+<<<<<<< HEAD
   getCoinbaseTransactions(
     transactions: Transaction[],
   ): { transaction: Transaction; index: number }[] {
@@ -195,6 +196,20 @@ export class Block {
           transaction: tx,
           index: transactions.indexOf(tx),
         });
+=======
+  async getCoinbaseTransactions(): Promise<{ transaction: Transaction; index: number }[]> {
+    const coinbaseTxs: { transaction: Transaction; index: number }[] = [];
+    for (const txid of this.txids) {
+      const netObj = await objectManager.getFromNetwork(txid);
+      try {
+        const txObj = CoinbaseTransactionObject.check(netObj);
+        coinbaseTxs.push({
+          transaction: Transaction.fromNetworkObject(txObj),
+          index: this.txids.indexOf(txid),
+        });
+      } catch (err) {
+        //No coinbaseTx: ignore
+>>>>>>> 4f6c7e0 (extend validation in block)
       }
     }
     return coinbaseTxs;
@@ -303,7 +318,7 @@ export class Block {
       return { success: true };
     }
 
-    let transactions: Transaction[];
+    let transactions: { tx: Transaction, txid: string }[];
     try {
       transactions = await this.getTxs();
     } catch (e) {
@@ -345,13 +360,13 @@ export class Block {
     //
     // This assumes all previous validation steps were performed correctly.
     try {
-      totalFees = await Block.calculateFees(transactions.slice(1));
+      totalFees = await Block.calculateFees(transactions.map(tx => tx.tx).slice(1));
     } catch (e) {
       // Analyze if it's the case, and replace it with throwing an error
       assert(false, 'All validation should happen before');
     }
 
-    if (transactions[0].outputs[0].value > totalFees + BLOCK_REWARD) {
+    if (transactions[0].tx.outputs[0].value > totalFees + BLOCK_REWARD) {
       return {
         success: false,
         error: {
@@ -363,7 +378,7 @@ export class Block {
     }
 
     // Exactly 0 or 1 coinbase transactions allowed
-    const coinbaseTransactions = this.getCoinbaseTransactions(transactions.map((x) => x.tx));
+    const coinbaseTransactions = await this.getCoinbaseTransactions(transactions.map(tx => tx.tx));
     if (coinbaseTransactions.length > 1) {
       return {
         success: false,
