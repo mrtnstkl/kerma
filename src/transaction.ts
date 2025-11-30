@@ -238,7 +238,7 @@ export class Transaction {
 
       totalInputValue += referencedOutput.value;
 
-      if (totalInputValue < totalOutputValue) {
+      if (!txInstance.isCoinbase() && totalInputValue < totalOutputValue) {
         const error: ErrorMessageType = {
           type: 'error',
           msg: `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
