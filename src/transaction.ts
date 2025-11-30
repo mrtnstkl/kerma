@@ -184,7 +184,7 @@ export class Transaction {
   }
 
   isCoinbase(): Boolean {
-    return (!this.inputs || this.inputs.length === 0) && this.height != undefined;
+    return this.inputs === undefined || this.inputs.length === 0;
   }
 
   static async validateTransaction(txObj: TransactionObjectType): Promise<ValidationResultType> {

@@ -183,6 +183,21 @@ export class Block {
     return Transaction.fromNetworkObject(txObj);
   }
 
+  getCoinbaseTransactions(
+    transactions: Transaction[],
+  ): { transaction: Transaction; index: number }[] {
+    const coinbaseTxs: { transaction: Transaction; index: number }[] = [];
+    for (const tx of transactions) {
+      if (tx.isCoinbase()) {
+        coinbaseTxs.push({
+          transaction: tx,
+          index: transactions.indexOf(tx),
+        });
+      }
+    }
+    return coinbaseTxs;
+  }
+
   hash(): string {
     const blockObject = BlockObject.check({
       type: 'block',
@@ -211,16 +226,18 @@ export class Block {
    * @returns collecetion of transaction
    * @throws Error
    */
-  async getTxs(/* TODO */): Promise<Transaction[]> {
-    const txs: Transaction[] = [];
+  async getTxs(): Promise<{ txid: string; tx: Transaction }[]> {
+    const results: { txid: string; tx: Transaction }[] = [];
+
     await Promise.all(
       this.txids.map(async (txid) => {
         const txObj = GeneralTransactionObject.check(await objectManager.getFromNetwork(txid));
         const tx = Transaction.fromNetworkObject(txObj);
-        txs.push(tx);
+        results.push({ txid, tx });
       }),
     );
-    return txs;
+
+    return results;
   }
 
   /**
@@ -261,7 +278,11 @@ export class Block {
     const transactions = await this.getTxs();
     const utxoSet = new UTXOSet(new Set());
     try {
-      await utxoSet.applyMultiple(transactions);
+      await utxoSet.applyMultiple(
+        transactions.map((transaction) => {
+          return transaction.tx;
+        }),
+      );
     } catch (error) {
       return {
         success: false,
@@ -288,6 +309,53 @@ export class Block {
           msg: `Block target ${this.t} does not match expected target ${TARGET}`,
         },
       };
+    }
+
+    // Exactly 0 or 1 coinbase transactions allowed
+    const coinbaseTransactions = this.getCoinbaseTransactions(transactions.map((x) => x.tx));
+    if (coinbaseTransactions.length > 1) {
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'INVALID_BLOCK_COINBASE',
+          msg: `Block ${this.hash()} has more than one Coinbase transaction`,
+        },
+      };
+    }
+
+    // If coinbase exists, it must be at index 0
+    if (coinbaseTransactions.length === 1 && coinbaseTransactions[0].index !== 0) {
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'INVALID_BLOCK_COINBASE',
+          msg: `Block ${this.hash()} contains coinbase transaction at index ${coinbaseTransactions[0].index}, expected 0`,
+        },
+      };
+    }
+
+    //Check that no transaction spends from an in-block coinbase transaction
+    if (coinbaseTransactions.length === 1) {
+      const coinbaseTxid = this.txids[0]; // guaranteed true by earlier check
+
+      for (const { txid, tx } of transactions) {
+        if (txid === coinbaseTxid) continue; // skip coinbase itself
+
+        for (const input of tx.inputs ?? []) {
+          if (input.outpoint?.txid === coinbaseTxid) {
+            return {
+              success: false,
+              error: {
+                type: 'error',
+                name: 'INVALID_BLOCK_COINBASE',
+                msg: `Transaction ${txid} spends from in-block coinbase ${coinbaseTxid}`,
+              },
+            };
+          }
+        }
+      }
     }
 
     return { success: true };
