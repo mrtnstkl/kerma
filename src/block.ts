@@ -353,9 +353,7 @@ export class Block {
     this.meta.utxoSet = utxoSet;
 
     // Exactly 0 or 1 coinbase transactions allowed
-    const coinbaseTransactions = await this.getCoinbaseTransactions(
-      transactions.map((tx) => tx.tx),
-    );
+    const coinbaseTransactions = this.getCoinbaseTransactions(transactions.map((tx) => tx.tx));
     if (coinbaseTransactions.length > 1) {
       return {
         success: false,
