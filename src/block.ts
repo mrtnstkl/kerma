@@ -382,9 +382,22 @@ export class Block {
     }
 
     // If coinbase exists, it must be at index 0
+    if (coinbaseTransactions.length === 1 && coinbaseTransactions[0].index !== 0) {
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'INVALID_BLOCK_COINBASE',
+          msg: `Block ${this.hash()} contains coinbase transaction at index ${coinbaseTransactions[0].index}, expected 0`,
+        },
+      };
+    }
+
+    //Check that no transaction spends from an in-block coinbase transaction
     if (coinbaseTransactions.length === 1) {
+      const coinbaseTxid = this.txids[0]; // guaranteed true by earlier check
       const coinbaseTx = coinbaseTransactions[0].transaction;
-      if (coinbaseTx.height != this.meta.height) {
+      if (coinbaseTx.height !== this.meta.height) {
         return {
           success: false,
           error: {
@@ -393,21 +406,7 @@ export class Block {
             msg: `Coinbase height ${coinbaseTx.height} matches block height ${this.meta.height}`,
           },
         };
-      } else if (coinbaseTransactions[0].index !== 0) {
-        return {
-          success: false,
-          error: {
-            type: 'error',
-            name: 'INVALID_BLOCK_COINBASE',
-            msg: `Block ${this.hash()} contains coinbase transaction at index ${coinbaseTransactions[0].index}, expected 0`,
-          },
-        };
       }
-    }
-
-    //Check that no transaction spends from an in-block coinbase transaction
-    if (coinbaseTransactions.length === 1) {
-      const coinbaseTxid = this.txids[0]; // guaranteed true by earlier check
 
       for (const { txid, tx } of transactions) {
         if (txid === coinbaseTxid) continue; // skip coinbase itself
