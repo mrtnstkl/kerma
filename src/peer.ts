@@ -297,7 +297,7 @@ export class Peer {
     }
     // check if we have the object
     if (await objectManager.exists(objectManager.id(msg.object))) {
-      this.debug(`Received object is already known`);
+      this.debug(`Received object is already known: ${objectManager.id(msg.object)}`);
       return;
     }
 
