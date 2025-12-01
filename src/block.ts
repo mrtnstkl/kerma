@@ -428,29 +428,36 @@ export class Block {
       }
     }
 
-    let totalFees: number;
+    if (coinbaseTransactions.length === 1) {
+      let totalFees: number;
 
-    // Verify law of conservation for the coinbase transaction.
-    //
-    // This assumes all previous validation steps were performed correctly.
-    try {
-      // TODO : This doesn't handle the case when there's no coinbase transaction
-      totalFees = await Block.calculateFees(transactions.map((tx) => tx.tx).slice(1));
-    } catch (e) {
-      // Analyze if it's the case, and replace it with throwing an error
-      assert(false, 'All validation should happen before');
-    }
+      // Verify law of conservation for the coinbase transaction.
+      //
+      // This assumes all previous validation steps were performed correctly.
+      try {
+        totalFees = await Block.calculateFees(transactions.map((tx) => tx.tx).slice(0));
+      } catch (e) {
+        // Analyze if it's the case, and replace it with throwing an error
+        return {
+          success: false,
+          error: {
+            type: 'error',
+            name: 'INVALID_FORMAT',
+            msg: 'Unexpected error!',
+          },
+        };
+      }
 
-    // TODO: This also doesn't take into account a case when there's not coinbase transaction.
-    if (transactions[0].tx.outputs[0].value > totalFees + BLOCK_REWARD) {
-      return {
-        success: false,
-        error: {
-          type: 'error',
-          name: 'INVALID_BLOCK_COINBASE',
-          msg: 'Coinbase transaction in the block creates more coins than allowed.',
-        },
-      };
+      if (transactions[0].tx.outputs[0].value > totalFees + BLOCK_REWARD) {
+        return {
+          success: false,
+          error: {
+            type: 'error',
+            name: 'INVALID_BLOCK_COINBASE',
+            msg: 'Coinbase transaction in the block creates more coins than allowed.',
+          },
+        };
+      }
     }
 
     const utxoSet = previousBlock.meta.utxoSet.copy();

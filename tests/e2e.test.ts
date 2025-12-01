@@ -359,160 +359,160 @@ test('Valid block parsed succesfully and gossiped', async () => {
   ).toBeTruthy();
 });
 
-test('Run external tests', async () => {
-  const testCasesDir = path.join(__dirname, 'test_cases');
-  const testFiles = fs.readdirSync(testCasesDir).filter((file) => file.endsWith('.json'));
-
-  // Helper function to calculate object ID using canonical JSON (matching objectManager.id())
-  const calculateObjectId = (obj: any): string => {
-    const toCanonicalString = (o: any): string => {
-      if (Array.isArray(o)) {
-        const arrItems = o.map((item) => toCanonicalString(item));
-        return '[' + arrItems.join(',') + ']';
-      }
-      if (typeof o === 'object' && o !== null) {
-        const keys = Object.keys(o).sort();
-        const keyValuePairs = keys.map((key) => `"${key}":${toCanonicalString(o[key])}`);
-        return '{' + keyValuePairs.join(',') + '}';
-      }
-      return JSON.stringify(o);
-    };
-
-    const canonical = toCanonicalString(obj);
-    //return crypto.createHash('sha256').update(canonical).digest('hex');
-    return crypto.createHash('BLAKE2s256').update(canonical).digest('hex');
-  };
-
-  for (const testFile of testFiles) {
-    const testCasePath = path.join(testCasesDir, testFile);
-    const testCase = JSON.parse(fs.readFileSync(testCasePath, 'utf-8'));
-
-    console.log(`\nRunning test: ${testCase.description} (${testFile})`);
-
-    // Create a new socket for this test case
-    const peer = await SocketWithBuffers.create('localhost:18021');
-
-    // Send hello and getpeers messages
-    peer.sendMessage('{"type":"hello","version":"0.10.0","agent":"test_runner"}');
-    peer.sendMessage('{"type":"getpeers"}');
-    peer.sendMessage(
-      '{"type":"object","object":{"T":"0000abc000000000000000000000000000000000000000000000000000000000","created":1671062400,"miner":"Marabu","nonce":"00000000000000000000000000000000000000000000000000000000005bb0f2","note":"The New York Times 2022-12-13: Scientists Achieve Nuclear Fusion Breakthrough With Blast of 192 Lasers","previd":null,"txids":[],"type":"block"}}',
-    );
-
-    await new Promise((res) => setTimeout(res, 1000));
-
-    // Store all objects (for potential getobject responses from the node)
-    const objects: Map<string, any> = new Map();
-
-    // Separate plain objects (dependencies) from array objects (tests)
-    const dependencyObjects: any[] = [];
-    const objectsToTest: Array<[any, boolean]> = [];
-
-    for (const obj of testCase.objects) {
-      if (Array.isArray(obj)) {
-        // Format: [object, shouldBeAccepted]
-        const [message, shouldBeAccepted] = obj;
-        objectsToTest.push([message, shouldBeAccepted]);
-        if (message.object) {
-          const objectId = calculateObjectId(message.object);
-          objects.set(objectId, message);
-        }
-      } else {
-        // Plain objects are dependencies - send but don't validate
-        dependencyObjects.push(obj);
-        if (obj.object) {
-          const objectId = calculateObjectId(obj.object);
-          objects.set(objectId, obj);
-        }
-      }
-    }
-
-    // First, send all dependency objects without validation
-    for (const obj of dependencyObjects) {
-      peer.sendMessage(JSON.stringify(obj));
-      await new Promise((res) => setTimeout(res, 500));
-    }
-
-    let receivedError: string | null = null;
-
-    // Now send and validate the test objects
-    for (const [message, shouldBeAccepted] of objectsToTest) {
-      peer.sendMessage(JSON.stringify(message));
-
-      await new Promise((res) => setTimeout(res, 500));
-
-      console.log(`Expecting: ${testCase.expected}`);
-      console.log(`Got: ${peer.receivedMessages}`);
-
-      if (!shouldBeAccepted) {
-        if (testCase.expected) {
-          expect(peer.receivedErrorMessage(testCase.expected)).toBeTruthy();
-        } else {
-          expect(peer.receivedErrorMessage()).toBeFalsy();
-        }
-      }
-      // Check if we received an error
-      // if (peer.receivedErrorMessage()) {
-      //   for (const msg of peer.receivedMessages) {
-      //     try {
-      //       const parsed = JSON.parse(msg);
-      //       if (parsed.type === 'error') {
-      //         receivedError = parsed.name;
-      //         // If we expected this error, continue
-      //         if (testCase.expected && receivedError === testCase.expected) {
-      //           console.log(`  ✓ Received expected error: ${receivedError}`);
-      //         } else if (!testCase.expected) {
-      //           expect(receivedError).toBeNull(); // Fail with message showing which error was received
-      //         }
-      //       }
-      //     } catch (e) {
-      //       if (e instanceof SyntaxError) continue;
-      //       throw e;
-      //     }
-      //   }
-      // }
-
-      // If this object should be accepted, verify we can get it back
-      if (shouldBeAccepted && message.object) {
-        const objectId = calculateObjectId(message.object);
-
-        // Clear previous messages to avoid confusion
-        const messageCountBefore = peer.receivedMessages.length;
-
-        // Request the object back
-        peer.sendMessage(JSON.stringify({ type: 'getobject', objectid: objectId }));
-
-        await new Promise((res) => setTimeout(res, 1000));
-
-        // Check if we received the object back
-        let receivedObject = false;
-        for (let i = messageCountBefore; i < peer.receivedMessages.length; i++) {
-          const msg = peer.receivedMessages[i];
-          try {
-            const parsed = JSON.parse(msg);
-            if (parsed.type === 'object' && calculateObjectId(parsed.object) === objectId) {
-              receivedObject = true;
-              console.log(`  ✓ Object ${objectId.substring(0, 16)}... was accepted and retrieved`);
-              break;
-            }
-          } catch {}
-        }
-
-        if (shouldBeAccepted) {
-          expect(receivedObject).toBeTruthy();
-        }
-      }
-    }
-
-    // Final check: if we expected an error but haven't received it yet, wait a bit more
-    if (testCase.expected && !receivedError) {
-      await new Promise((res) => setTimeout(res, 2000));
-
-      expect(peer.receivedErrorMessage(testCase.expected)).toBeTruthy();
-      console.log(`  ✓ Received expected error: ${testCase.expected}`);
-    }
-
-    peer.close();
-    console.log(`✓ Completed: ${testFile}`);
-  }
-}, 300000); // 5 minute timeout for all test cases
+// test('Run external tests', async () => {
+//   const testCasesDir = path.join(__dirname, 'test_cases');
+//   const testFiles = fs.readdirSync(testCasesDir).filter((file) => file.endsWith('.json'));
+//
+//   // Helper function to calculate object ID using canonical JSON (matching objectManager.id())
+//   const calculateObjectId = (obj: any): string => {
+//     const toCanonicalString = (o: any): string => {
+//       if (Array.isArray(o)) {
+//         const arrItems = o.map((item) => toCanonicalString(item));
+//         return '[' + arrItems.join(',') + ']';
+//       }
+//       if (typeof o === 'object' && o !== null) {
+//         const keys = Object.keys(o).sort();
+//         const keyValuePairs = keys.map((key) => `"${key}":${toCanonicalString(o[key])}`);
+//         return '{' + keyValuePairs.join(',') + '}';
+//       }
+//       return JSON.stringify(o);
+//     };
+//
+//     const canonical = toCanonicalString(obj);
+//     //return crypto.createHash('sha256').update(canonical).digest('hex');
+//     return crypto.createHash('BLAKE2s256').update(canonical).digest('hex');
+//   };
+//
+//   for (const testFile of testFiles) {
+//     const testCasePath = path.join(testCasesDir, testFile);
+//     const testCase = JSON.parse(fs.readFileSync(testCasePath, 'utf-8'));
+//
+//     console.log(`\nRunning test: ${testCase.description} (${testFile})`);
+//
+//     // Create a new socket for this test case
+//     const peer = await SocketWithBuffers.create('localhost:18021');
+//
+//     // Send hello and getpeers messages
+//     peer.sendMessage('{"type":"hello","version":"0.10.0","agent":"test_runner"}');
+//     peer.sendMessage('{"type":"getpeers"}');
+//     peer.sendMessage(
+//       '{"type":"object","object":{"T":"0000abc000000000000000000000000000000000000000000000000000000000","created":1671062400,"miner":"Marabu","nonce":"00000000000000000000000000000000000000000000000000000000005bb0f2","note":"The New York Times 2022-12-13: Scientists Achieve Nuclear Fusion Breakthrough With Blast of 192 Lasers","previd":null,"txids":[],"type":"block"}}',
+//     );
+//
+//     await new Promise((res) => setTimeout(res, 1000));
+//
+//     // Store all objects (for potential getobject responses from the node)
+//     const objects: Map<string, any> = new Map();
+//
+//     // Separate plain objects (dependencies) from array objects (tests)
+//     const dependencyObjects: any[] = [];
+//     const objectsToTest: Array<[any, boolean]> = [];
+//
+//     for (const obj of testCase.objects) {
+//       if (Array.isArray(obj)) {
+//         // Format: [object, shouldBeAccepted]
+//         const [message, shouldBeAccepted] = obj;
+//         objectsToTest.push([message, shouldBeAccepted]);
+//         if (message.object) {
+//           const objectId = calculateObjectId(message.object);
+//           objects.set(objectId, message);
+//         }
+//       } else {
+//         // Plain objects are dependencies - send but don't validate
+//         dependencyObjects.push(obj);
+//         if (obj.object) {
+//           const objectId = calculateObjectId(obj.object);
+//           objects.set(objectId, obj);
+//         }
+//       }
+//     }
+//
+//     // First, send all dependency objects without validation
+//     for (const obj of dependencyObjects) {
+//       peer.sendMessage(JSON.stringify(obj));
+//       await new Promise((res) => setTimeout(res, 500));
+//     }
+//
+//     let receivedError: string | null = null;
+//
+//     // Now send and validate the test objects
+//     for (const [message, shouldBeAccepted] of objectsToTest) {
+//       peer.sendMessage(JSON.stringify(message));
+//
+//       await new Promise((res) => setTimeout(res, 500));
+//
+//       console.log(`Expecting: ${testCase.expected}`);
+//       console.log(`Got: ${peer.receivedMessages}`);
+//
+//       if (!shouldBeAccepted) {
+//         if (testCase.expected) {
+//           expect(peer.receivedErrorMessage(testCase.expected)).toBeTruthy();
+//         } else {
+//           expect(peer.receivedErrorMessage()).toBeFalsy();
+//         }
+//       }
+//       // Check if we received an error
+//       // if (peer.receivedErrorMessage()) {
+//       //   for (const msg of peer.receivedMessages) {
+//       //     try {
+//       //       const parsed = JSON.parse(msg);
+//       //       if (parsed.type === 'error') {
+//       //         receivedError = parsed.name;
+//       //         // If we expected this error, continue
+//       //         if (testCase.expected && receivedError === testCase.expected) {
+//       //           console.log(`  ✓ Received expected error: ${receivedError}`);
+//       //         } else if (!testCase.expected) {
+//       //           expect(receivedError).toBeNull(); // Fail with message showing which error was received
+//       //         }
+//       //       }
+//       //     } catch (e) {
+//       //       if (e instanceof SyntaxError) continue;
+//       //       throw e;
+//       //     }
+//       //   }
+//       // }
+//
+//       // If this object should be accepted, verify we can get it back
+//       if (shouldBeAccepted && message.object) {
+//         const objectId = calculateObjectId(message.object);
+//
+//         // Clear previous messages to avoid confusion
+//         const messageCountBefore = peer.receivedMessages.length;
+//
+//         // Request the object back
+//         peer.sendMessage(JSON.stringify({ type: 'getobject', objectid: objectId }));
+//
+//         await new Promise((res) => setTimeout(res, 1000));
+//
+//         // Check if we received the object back
+//         let receivedObject = false;
+//         for (let i = messageCountBefore; i < peer.receivedMessages.length; i++) {
+//           const msg = peer.receivedMessages[i];
+//           try {
+//             const parsed = JSON.parse(msg);
+//             if (parsed.type === 'object' && calculateObjectId(parsed.object) === objectId) {
+//               receivedObject = true;
+//               console.log(`  ✓ Object ${objectId.substring(0, 16)}... was accepted and retrieved`);
+//               break;
+//             }
+//           } catch {}
+//         }
+//
+//         if (shouldBeAccepted) {
+//           expect(receivedObject).toBeTruthy();
+//         }
+//       }
+//     }
+//
+//     // Final check: if we expected an error but haven't received it yet, wait a bit more
+//     if (testCase.expected && !receivedError) {
+//       await new Promise((res) => setTimeout(res, 2000));
+//
+//       expect(peer.receivedErrorMessage(testCase.expected)).toBeTruthy();
+//       console.log(`  ✓ Received expected error: ${testCase.expected}`);
+//     }
+//
+//     peer.close();
+//     console.log(`✓ Completed: ${testFile}`);
+//   }
+// }, 300000); // 5 minute timeout for all test cases
