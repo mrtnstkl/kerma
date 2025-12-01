@@ -435,7 +435,7 @@ export class Block {
       //
       // This assumes all previous validation steps were performed correctly.
       try {
-        totalFees = await Block.calculateFees(transactions.map((tx) => tx.tx).slice(0));
+        totalFees = await Block.calculateFees(transactions.map((tx) => tx.tx).slice(1));
       } catch (e) {
         // Analyze if it's the case, and replace it with throwing an error
         return {
