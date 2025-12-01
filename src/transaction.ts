@@ -77,19 +77,31 @@ export class Outpoint {
   async resolve(): Promise<Output> {
     let tx: GeneralTransactionObjectType;
 
+    let invalidType = false;
+
     try {
-      tx = (await objectManager.get(this.txid)) as GeneralTransactionObjectType;
+      const txCandidate = GeneralTransactionObject.validate(await objectManager.get(this.txid));
+
+      if (txCandidate.success) {
+        tx = txCandidate.value;
+      } else {
+        invalidType = true;
+      }
     } catch {
       throw new ObjectNotFoundError(
         `UNKNOWN_OBJECT: Transaction ${this.txid} not found in database.`,
       );
     }
 
-    if (tx.type !== 'transaction') {
+    if (invalidType) {
+      throw new Error('Expected transaction, got block.');
+    }
+
+    if (tx!.type !== 'transaction') {
       throw new Error(`Referenced object ${this.txid} is not a transaction.`);
     }
 
-    const outputData = tx.outputs[this.index];
+    const outputData = tx!.outputs[this.index];
     if (!outputData) {
       throw new InvalidOutpointError(
         `Invalid outpoint: Index ${this.index} is out of bounds for tx ${this.txid}.`,
@@ -242,15 +254,6 @@ export class Transaction {
 
       totalInputValue += referencedOutput.value;
 
-      if (!txInstance.isCoinbase() && totalInputValue < totalOutputValue) {
-        const error: ErrorMessageType = {
-          type: 'error',
-          msg: `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
-          name: 'INVALID_TX_CONSERVATION',
-        };
-        return { success: false, error };
-      }
-
       // Check the signature at the end, so that the prerequisite for the signature check is perfectly correct transaction.
 
       const { sig } = input;
@@ -273,6 +276,15 @@ export class Transaction {
         };
         return { success: false, error };
       }
+    }
+
+    if (!txInstance.isCoinbase() && totalInputValue < totalOutputValue) {
+      const error: ErrorMessageType = {
+        type: 'error',
+        msg: `Weak law of conservation violated: Input sum (${totalInputValue}) < Output sum (${totalOutputValue}).`,
+        name: 'INVALID_TX_CONSERVATION',
+      };
+      return { success: false, error };
     }
 
     return { success: true };
@@ -320,13 +332,13 @@ export class Transaction {
       ? this.inputs?.map((input) => input.toNetworkObject())
       : this.inputsUnsigned().map((input) => input.toNetworkObject());
 
-    if ((!this.inputs || this.inputs.length === 0) && this.height != undefined) {
+    if ((!this.inputs || this.inputs.length === 0) && this.height !== undefined) {
       return {
         type: 'transaction',
         height: this.height,
         outputs: outputs,
       };
-    } else if (inputs != undefined) {
+    } else if (inputs !== undefined) {
       return {
         type: 'transaction',
         inputs: inputs,

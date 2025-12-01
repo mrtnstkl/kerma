@@ -69,7 +69,7 @@ export class BlockManager {
       miner: block.miner,
       note: block.note,
     });
-    const blockid = objectManager.put(blockObj);
+    const blockid = await objectManager.put(blockObj);
     const blockMetaObj = BlockMetaObject.check({
       verified: block.meta.verified,
       height: block.meta.height,
@@ -357,13 +357,13 @@ export class Block {
       };
     }
 
-    if (this.created <= previousBlock.created) {
+    if (this.created <= previousBlock.created || this.created > Math.floor(Date.now() / 1000)) {
       return {
         success: false,
         error: {
           type: 'error',
           name: 'INVALID_BLOCK_TIMESTAMP',
-          msg: 'Block timestamp must be greater than parent timestamp',
+          msg: 'Block timestamp must be greater than parent timestamp and not in the future',
         },
       };
     }
@@ -428,27 +428,36 @@ export class Block {
       }
     }
 
-    let totalFees: number;
+    if (coinbaseTransactions.length === 1) {
+      let totalFees: number;
 
-    // Verify law of conservation for the coinbase transaction.
-    //
-    // This assumes all previous validation steps were performed correctly.
-    try {
-      totalFees = await Block.calculateFees(transactions.map((tx) => tx.tx).slice(1));
-    } catch (e) {
-      // Analyze if it's the case, and replace it with throwing an error
-      assert(false, 'All validation should happen before');
-    }
+      // Verify law of conservation for the coinbase transaction.
+      //
+      // This assumes all previous validation steps were performed correctly.
+      try {
+        totalFees = await Block.calculateFees(transactions.map((tx) => tx.tx).slice(1));
+      } catch (e) {
+        // Analyze if it's the case, and replace it with throwing an error
+        return {
+          success: false,
+          error: {
+            type: 'error',
+            name: 'INVALID_FORMAT',
+            msg: 'Unexpected error!',
+          },
+        };
+      }
 
-    if (transactions[0].tx.outputs[0].value > totalFees + BLOCK_REWARD) {
-      return {
-        success: false,
-        error: {
-          type: 'error',
-          name: 'INVALID_BLOCK_COINBASE',
-          msg: 'Coinbase transaction in the block creates more coins than allowed.',
-        },
-      };
+      if (transactions[0].tx.outputs[0].value > totalFees + BLOCK_REWARD) {
+        return {
+          success: false,
+          error: {
+            type: 'error',
+            name: 'INVALID_BLOCK_COINBASE',
+            msg: 'Coinbase transaction in the block creates more coins than allowed.',
+          },
+        };
+      }
     }
 
     const utxoSet = previousBlock.meta.utxoSet.copy();
@@ -463,12 +472,13 @@ export class Block {
         success: false,
         error: {
           type: 'error',
-          name: 'INVALID_TX_CONSERVATION',
+          name: 'INVALID_TX_OUTPOINT',
           msg: `Block ${this.hash()} violates transaction conservation: ${error}`,
         },
       };
     }
     this.meta.utxoSet = utxoSet;
+    this.meta.verified = true;
 
     return { success: true };
   }
