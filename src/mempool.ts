@@ -1,15 +1,16 @@
-import { Block } from './block';
+import { Block, blockManager } from './block';
 import { Chain } from './chain';
 import { logger } from './logger';
 import { db, ObjectId, objectManager } from './object';
 import { Transaction } from './transaction';
 import { UTXOSet } from './utxo';
+import { TransactionObjectType } from '@src/message';
 
 /**
  * Handles the state of the Mining Pool
  */
 class MemPool {
-  /* TODO */
+  private txIds: Set<ObjectId> = new Set();
 
   async init() {
     await this.load();
@@ -20,9 +21,7 @@ class MemPool {
    * @returns all IDs from the transactions in the mempool
    */
   getTxIds(): ObjectId[] {
-    /* TODO */
-    const x: ObjectId[] = [];
-    return x;
+    return Array.from(this.txIds);
   }
 
   /**
@@ -30,21 +29,53 @@ class MemPool {
    * @param txids
    */
   async fromTxIds(txids: ObjectId[]) {
-    /* TODO */
+    this.txIds = new Set(txids);
+    await this.save();
   }
 
   /**
    * save this mempool state
    */
   async save() {
-    /* TODO */
+    try {
+      await db.put('mempool', Array.from(this.txIds));
+    } catch (e) {
+      logger.error('Failed to save mempool: %o', e);
+    }
   }
 
   /**
    * load mempool state
    */
   async load() {
-    /* TODO */
+    if (await db.exists('mempool')) {
+      try {
+        const ids = await db.get('mempool');
+        if (Array.isArray(ids)) {
+          this.txIds = new Set(ids);
+        }
+      } catch (e) {
+        logger.error('Failed to load mempool: %o', e);
+      }
+    }
+  }
+
+  async add(tx: ObjectId) {
+    if (this.txIds.has(tx)) {
+      return;
+    }
+
+    this.txIds.add(tx);
+    await this.save();
+    logger.debug(`Added tx ${tx} to mempool`);
+  }
+
+  async remove(txId: ObjectId) {
+    if (this.txIds.has(txId)) {
+      this.txIds.delete(txId);
+      await this.save();
+      logger.debug(`Removed tx ${txId} from mempool`);
+    }
   }
 
   /**
@@ -53,8 +84,8 @@ class MemPool {
    * @returns true iff tx has been successfully added to the mempool
    */
   async onTransactionArrival(tx: Transaction): Promise<boolean> {
+    return true;
     /* TODO */
-    return false;
   }
 
   /**
@@ -64,7 +95,40 @@ class MemPool {
    * @param longFork
    */
   async reorg(lca: Block, shortFork: Chain, longFork: Chain) {
-    /* TODO */
+    logger.info('Mempool Reorg: Re-evaluating transactions...');
+
+    // 1. Rollback Short Fork (Old Chain)
+    // Transactions in these blocks are losing their confirmation.
+    // We must add them back to the mempool so they can be mined again.
+    let currentBlock = shortFork.tip;
+    while (currentBlock.t !== lca.t) {
+      for (const tx of currentBlock.txids) {
+        // We only add it back if it's not a Coinbase tx (which is only valid in its specific block)
+        const txObj = Transaction.fromNetworkObject(
+          (await objectManager.get(tx)) as TransactionObjectType,
+        );
+        if (!txObj.isCoinbase()) {
+          this.txIds.add(tx);
+        }
+      }
+      if (!currentBlock.previd) break;
+      currentBlock = await blockManager.get(currentBlock.previd);
+    }
+
+    // 2. Rollforward Long Fork (New Chain)
+    // Transactions in these blocks are now confirmed.
+    // We must remove them from the mempool to avoid duplication.
+    currentBlock = longFork.tip;
+    while (currentBlock.t !== lca.t) {
+      for (const tx of currentBlock.txids) {
+        this.txIds.delete(tx);
+      }
+      if (!currentBlock.previd) break;
+      currentBlock = await blockManager.get(currentBlock.previd);
+    }
+
+    await this.save();
+    logger.info(`Mempool Reorg Complete. Current size: ${this.txIds.size}`);
   }
 }
 

@@ -8,8 +8,14 @@ import { ChainObject, ChainObjectType } from '@src/message';
 /**
  * Handles the blockchain state
  */
+enum Action {
+  ADD = 'add',
+  REMOVE = 'remove',
+}
+
 class ChainManager {
   chains: Set<ChainObjectType> = new Set<ChainObjectType>();
+  private head: Block | null = null;
   async init() {
     let chainsFromDb: ChainObjectType[] = [];
     if (await db.exists('chains')) {
@@ -33,7 +39,83 @@ class ChainManager {
     logger.info(`Stored %d chains to database`, this.chains.size);
   }
   async onValidBlockArrival(block: Block) {
-    /* TODO */
+    if (!this.head) {
+      this.head = block;
+      await this.updateMempoolForBlock(block, Action.ADD);
+      await this.save();
+      logger.info(`Genesis block initialized at height ${block.meta.height}`);
+
+      //Duplicate Check
+      if (block.t === this.head.t) {
+        return;
+      }
+
+      //Chain Extension
+      //New block directly extends current tip
+      if (block.previd === this.head.t) {
+        this.head = block;
+        await this.updateMempoolForBlock(block, Action.ADD);
+        logger.info(`Chain extended to height ${block.meta.height}`);
+        await this.save();
+        return;
+      }
+
+      //Reorganization if block claims higher height as tip
+      if (block.meta.height > this.head.meta.height) {
+        logger.info(`Reorg triggered: Switching from ${this.head.t} to ${block.t}`);
+        const [lca, shortForkChain, longForkChain] = await Chain.getForks(this.head, block);
+
+        if (lca) {
+          // A. Rollback (Disconnect Old Chain)
+          // Traverse from current Head down to LCA (exclusive)
+          // Add these transactions BACK to the mempool
+          let currentOld = this.head;
+          while (currentOld.t !== lca.t && currentOld.previd) {
+            await this.updateMempoolForBlock(currentOld, Action.REMOVE); // 'remove' from chain = add to mempool
+            currentOld = await blockManager.get(currentOld.previd);
+          }
+
+          // B. Roll forward (Connect New Chain)
+          // We need to apply blocks from LCA+1 up to New Tip.
+          // Since chains are linked backwards, we collect them and reverse.
+          const newPath: Block[] = [];
+          let currentNew = block;
+          while (currentNew.t !== lca.t && currentNew.previd) {
+            newPath.push(currentNew);
+            currentNew = await blockManager.get(currentNew.previd);
+          }
+
+          // Apply in correct order (Ascending Height)
+          for (const b of newPath.reverse()) {
+            await this.updateMempoolForBlock(b, Action.ADD); // 'add' to chain = remove from mempool
+          }
+
+          // Update Head
+          this.head = block;
+          await this.save();
+          logger.info(`Reorg complete. New height: ${this.head.meta.height}`);
+        }
+      } else {
+        // Block is valid but on a shorter or equal fork.
+        // We do nothing effectively, just store it (which is handled by caller/blockManager).
+        logger.info(
+          `Received valid block at height ${block.meta.height}, but current chain is longer/equal (${this.head.meta.height}).`,
+        );
+      }
+    }
+  }
+
+  async updateMempoolForBlock(block: Block, action: Action) {
+    if (!block.txids) return;
+
+    block.txids.forEach((tx) => {
+      if (action === Action.ADD) {
+        mempool.remove(tx);
+      } else {
+        // If block is removed from chain (reorg), add tx back to mempool
+        mempool.add(tx);
+      }
+    });
   }
 }
 
