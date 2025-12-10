@@ -101,46 +101,64 @@ class MemPool {
   async reorg(lca: Block, shortFork: Chain, longFork: Chain) {
     logger.info('Mempool Reorg: Re-evaluating transactions...');
 
-    // 1. Rollback Short Fork
-    let currentBlock = shortFork.tip;
+    const confirmedTxIds = new Set<string>();
+    let currentBlock = longFork.tip;
+
     while (objectManager.id(currentBlock) !== objectManager.id(lca)) {
       if (currentBlock.txids) {
         for (const tx of currentBlock.txids) {
-          try {
-            const txData = await objectManager.get(tx);
-            const txObj = Transaction.fromNetworkObject(
-              txData as TransactionObjectType,
-            );
-            if (!txObj.isCoinbase()) {
-              this.txIds.add(tx);
-            }
-          } catch (e) {}
-        }
-      }
-
-      if (!currentBlock.previd) break;
-      try {
-        currentBlock = (await currentBlock.loadParent()) as Block;
-        if (!currentBlock) break;
-      } catch (e) {
-        break;
-      }
-    }
-
-    // 2. Roll forward Long Fork
-    currentBlock = longFork.tip;
-    while (objectManager.id(currentBlock) !== objectManager.id(lca)) {
-      if (currentBlock.txids) {
-        for (const tx of currentBlock.txids) {
+          confirmedTxIds.add(tx);
           this.txIds.delete(tx);
         }
       }
 
       if (!currentBlock.previd) break;
+
       try {
-        currentBlock = (await currentBlock.loadParent()) as Block;
-        if (!currentBlock) break;
+        const parent = (await currentBlock.loadParent()) as Block;
+        if (!parent) break;
+        currentBlock = parent;
       } catch (e) {
+        logger.error(`Mempool Reorg: Failed to load parent of block ${objectManager.id(currentBlock)} on long fork`, e);
+        break;
+      }
+    }
+
+    currentBlock = shortFork.tip;
+
+    while (objectManager.id(currentBlock) !== objectManager.id(lca)) {
+      if (currentBlock.txids && currentBlock.txids.length > 0) {
+        const orphansToRescue = currentBlock.txids.filter(tx => !confirmedTxIds.has(tx));
+
+        await Promise.all(
+          orphansToRescue.map(async (tx) => {
+            try {
+              const txData = await objectManager.get(tx);
+              if (!txData) {
+                logger.warn(`Mempool Reorg: Missing data for tx ${tx} during rescue.`);
+                return;
+              }
+              const txObj = Transaction.fromNetworkObject(
+                txData as TransactionObjectType,
+              );
+              if (!txObj.isCoinbase()) {
+                this.txIds.add(tx);
+              }
+            } catch (e) {
+              logger.error(`Mempool Reorg: Error rescuing transaction ${tx}`, e);
+            }
+          })
+        );
+      }
+
+      if (!currentBlock.previd) break;
+
+      try {
+        const parent = (await currentBlock.loadParent()) as Block;
+        if (!parent) break;
+        currentBlock = parent;
+      } catch (e) {
+        logger.error(`Mempool Reorg: Failed to load parent of block ${objectManager.id(currentBlock)} on short fork`, e);
         break;
       }
     }
