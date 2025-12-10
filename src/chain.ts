@@ -1,7 +1,7 @@
 import { Block, blockManager } from './block';
 import { logger } from './logger';
 import { mempool } from './mempool';
-import { db, ObjectId } from './object';
+import {db, ObjectId, objectManager} from './object';
 import * as rt from 'runtypes';
 import { ChainObject, ChainObjectType } from '@src/message';
 
@@ -38,69 +38,69 @@ class ChainManager {
     }
     logger.info(`Stored %d chains to database`, this.chains.size);
   }
+
   async onValidBlockArrival(block: Block) {
+    // 1. Calculate the Block ID (Hash) first
+    // We assume objectManager.id() calculates the hash of the block object
+    const blockId = objectManager.id(block);
+
+    // Calculate Head ID if we have a head
+    const headId = this.head ? objectManager.id(this.head) : null;
+
+    // 2. Genesis Case
     if (!this.head) {
       this.head = block;
       await this.updateMempoolForBlock(block, Action.ADD);
       await this.save();
       logger.info(`Genesis block initialized at height ${block.meta.height}`);
+      return;
+    }
 
-      //Duplicate Check
-      if (block.t === this.head.t) {
-        return;
-      }
+    // 3. Duplicate Check
+    if (blockId === headId) {
+      return;
+    }
 
-      //Chain Extension
-      //New block directly extends current tip
-      if (block.previd === this.head.t) {
-        this.head = block;
-        await this.updateMempoolForBlock(block, Action.ADD);
-        logger.info(`Chain extended to height ${block.meta.height}`);
-        await this.save();
-        return;
-      }
+    // 4. Chain Extension (Happy Path)
+    // If the new block points to our current tip
+    if (block.previd === headId) {
+      this.head = block;
+      await this.updateMempoolForBlock(block, Action.ADD);
+      logger.info(`Chain extended to height ${block.meta.height}`);
+      await this.save();
+      return;
+    }
 
-      //Reorganization if block claims higher height as tip
-      if (block.meta.height > this.head.meta.height) {
-        logger.info(`Reorg triggered: Switching from ${this.head.t} to ${block.t}`);
-        const [lca, shortForkChain, longForkChain] = await Chain.getForks(this.head, block);
+    // 5. Reorganization Logic
+    if (block.meta.height > this.head.meta.height) {
+      logger.info(`Reorg triggered: Switching to new tip ${blockId}`);
 
-        if (lca) {
-          // A. Rollback (Disconnect Old Chain)
-          // Traverse from current Head down to LCA (exclusive)
-          // Add these transactions BACK to the mempool
-          let currentOld = this.head;
-          while (currentOld.t !== lca.t && currentOld.previd) {
-            await this.updateMempoolForBlock(currentOld, Action.REMOVE); // 'remove' from chain = add to mempool
-            currentOld = await blockManager.get(currentOld.previd);
-          }
+      const [lca, shortForkChain, longForkChain] = await Chain.getForks(this.head, block);
 
-          // B. Roll forward (Connect New Chain)
-          // We need to apply blocks from LCA+1 up to New Tip.
-          // Since chains are linked backwards, we collect them and reverse.
-          const newPath: Block[] = [];
-          let currentNew = block;
-          while (currentNew.t !== lca.t && currentNew.previd) {
-            newPath.push(currentNew);
-            currentNew = await blockManager.get(currentNew.previd);
-          }
+      if (lca) {
+        const lcaId = objectManager.id(lca);
 
-          // Apply in correct order (Ascending Height)
-          for (const b of newPath.reverse()) {
-            await this.updateMempoolForBlock(b, Action.ADD); // 'add' to chain = remove from mempool
-          }
-
-          // Update Head
-          this.head = block;
-          await this.save();
-          logger.info(`Reorg complete. New height: ${this.head.meta.height}`);
+        // A. Rollback (Disconnect Old Chain)
+        let currentOld = this.head;
+        while (objectManager.id(currentOld) !== lcaId && currentOld.previd) {
+          await this.updateMempoolForBlock(currentOld, Action.REMOVE); // remove from chain -> add to mempool
+          currentOld = await blockManager.get(currentOld.previd);
         }
-      } else {
-        // Block is valid but on a shorter or equal fork.
-        // We do nothing effectively, just store it (which is handled by caller/blockManager).
-        logger.info(
-          `Received valid block at height ${block.meta.height}, but current chain is longer/equal (${this.head.meta.height}).`,
-        );
+
+        // B. Rollforward (Connect New Chain)
+        const newPath: Block[] = [];
+        let currentNew = block;
+        while (objectManager.id(currentNew) !== lcaId && currentNew.previd) {
+          newPath.push(currentNew);
+          currentNew = await blockManager.get(currentNew.previd);
+        }
+
+        for (const b of newPath.reverse()) {
+          await this.updateMempoolForBlock(b, Action.ADD); // add to chain -> remove from mempool
+        }
+
+        this.head = block;
+        await this.save();
       }
     }
   }
@@ -155,7 +155,7 @@ export class Chain {
       b = await blockManager.get(b.previd);
     }
 
-    while (a.t !== b.t) {
+    while (objectManager.id(a) !== objectManager.id(b)) {
       if (a.previd == null || b.previd == null) break;
       a = await blockManager.get(a.previd);
       b = await blockManager.get(b.previd);
