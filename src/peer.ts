@@ -107,10 +107,17 @@ export class Peer {
     this.sendMessage(getobject);
   }
   async sendGetChainTip() {
-    /* TODO */
+    const getChainTip: GetChainTipMessageType = {
+      type: 'getchaintip',
+    };
+    this.sendMessage(getChainTip);
   }
   async sendChainTip(blockid: ObjectId) {
-    /* TODO */
+    const chainTip: ChainTipMessageType = {
+      type: 'chaintip',
+      blockId: blockid,
+    };
+    this.sendMessage(chainTip);
   }
   async sendGetMempool() {
     /* TODO */
@@ -142,17 +149,19 @@ export class Peer {
       this.fail();
     });
   }
+
   async fail() {
-    /* TODO */
     peerManager.peerFailed(this.peerAddr);
     this.info(`closing connection`);
     this.socket.end();
   }
+
   async onConnect() {
     this.info(`onConnect called`);
-    this.sendHello();
+    await this.sendHello();
     //immediately request for known peers
-    this.sendGetPeers();
+    await this.sendGetPeers();
+    await this.sendGetChainTip();
 
     setTimeout(() => {
       if (!this.handshakeCompleted) {
@@ -163,6 +172,7 @@ export class Peer {
       }
     }, HANDSHAKE_WAIT_TIME);
   }
+
   async onMessage(message: string) {
     this.debug(`Message arrival: ${message}`);
 
@@ -335,6 +345,7 @@ export class Peer {
         } else {
           // store the block
           await blockManager.put(blk);
+          await chainManager.onValidBlockArrival(blk);
           // gossip to other peers
           network.broadcast(blk.hash());
         }
@@ -345,13 +356,75 @@ export class Peer {
     if (this.hasExtraFields(msg, GetChainTipMessage.fields)) {
       return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS);
     }
-    /* TODO */
+    // check if we have the object
+    if (chainManager.head) {
+      // we do, so send it
+      this.info(`Sending chain tip to peer`);
+      await this.sendChainTip(objectManager.id(chainManager.head));
+    } else {
+      this.debug(`Chain tip not found locally, sending error message`);
+      return this.sendError('UNKNOWN_OBJECT', `Chain tip not found`);
+    }
   }
   async onMessageChainTip(msg: ChainTipMessageType) {
     if (this.hasExtraFields(msg, ChainTipMessage.fields)) {
       return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS);
     }
-    /* TODO */
+
+    const blockId = msg.blockId;
+
+    // 1. Check if we already have this object
+    if (!(await objectManager.exists(blockId))) {
+      this.info(`Received Chain tip for unknown block ${blockId}. Requesting from all peers...`);
+
+      // Trigger chain validation by requesting the tip.
+      // We broadcast the request to ALL peers as required.
+      const getObjectMsg: GetObjectMessageType = {
+        type: 'getobject',
+        objectid: blockId,
+      };
+
+      // Assuming peerManager has a list of active peers we can iterate
+      // You might need to import { peerManager } from './peermanager';
+      if (typeof network !== 'undefined' && network.peers) {
+        network.peers.forEach((peer) => {
+          if (peer.peerAddr !== this.peerAddr) {
+            peer.sendMessage(getObjectMsg);
+          }
+        });
+      }
+      return;
+    }
+
+    // 2. We have the object. Retrieve it to check validity.
+    const obj = await objectManager.get(blockId);
+
+    // 3. Verify it is actually a BLOCK (not a transaction)
+    if (!BlockObject.guard(obj)) {
+      this.debug(`ChainTip referenced a non-block object: ${blockId}`);
+      return this.fatalError('INVALID_FORMAT', `Object ${blockId} is not a block.`);
+    }
+
+    // 4. Verify Block Validity (specifically Proof of Work)
+    try {
+      const block = await Block.fromNetworkObject(obj);
+      const validation = await block.validate();
+
+      if (!validation.success) {
+        this.debug(`ChainTip block is invalid: ${validation.error.msg}`);
+        return this.fatalError(
+          'INVALID_BLOCK_POW',
+          `Block ${blockId} has invalid PoW or structure.`,
+        );
+      }
+
+      // If valid, we do nothing.
+      // The existence of a valid block in our DB means it's likely already processed
+      // by chainManager via onValidBlockArrival when it first arrived.
+    } catch (e) {
+      this.warn(`Error validating ChainTip block: ${e}`);
+      return this.fatalError('INVALID_FORMAT', `Could not validate block ${blockId}`);
+    }
   }
   async onMessageGetMempool(msg: GetMempoolMessageType) {
     if (this.hasExtraFields(msg, GetMempoolMessage.fields)) {

@@ -94,37 +94,55 @@ class MemPool {
    * @param shortFork
    * @param longFork
    */
+  // mempool.ts
+
+  // src/mempool.ts
+
   async reorg(lca: Block, shortFork: Chain, longFork: Chain) {
     logger.info('Mempool Reorg: Re-evaluating transactions...');
 
-    // 1. Rollback Short Fork (Old Chain)
-    // Transactions in these blocks are losing their confirmation.
-    // We must add them back to the mempool so they can be mined again.
+    // 1. Rollback Short Fork
     let currentBlock = shortFork.tip;
-    while (currentBlock.t !== lca.t) {
-      for (const tx of currentBlock.txids) {
-        // We only add it back if it's not a Coinbase tx (which is only valid in its specific block)
-        const txObj = Transaction.fromNetworkObject(
-          (await objectManager.get(tx)) as TransactionObjectType,
-        );
-        if (!txObj.isCoinbase()) {
-          this.txIds.add(tx);
+    while (objectManager.id(currentBlock) !== objectManager.id(lca)) {
+      if (currentBlock.txids) {
+        for (const tx of currentBlock.txids) {
+          try {
+            const txData = await objectManager.get(tx);
+            const txObj = Transaction.fromNetworkObject(
+              txData as TransactionObjectType,
+            );
+            if (!txObj.isCoinbase()) {
+              this.txIds.add(tx);
+            }
+          } catch (e) {}
         }
       }
+
       if (!currentBlock.previd) break;
-      currentBlock = await currentBlock.loadParent() as Block;
+      try {
+        currentBlock = (await currentBlock.loadParent()) as Block;
+        if (!currentBlock) break;
+      } catch (e) {
+        break;
+      }
     }
 
-    // 2. Rollforward Long Fork (New Chain)
-    // Transactions in these blocks are now confirmed.
-    // We must remove them from the mempool to avoid duplication.
+    // 2. Roll forward Long Fork
     currentBlock = longFork.tip;
-    while (currentBlock.t !== lca.t) {
-      for (const tx of currentBlock.txids) {
-        this.txIds.delete(tx);
+    while (objectManager.id(currentBlock) !== objectManager.id(lca)) {
+      if (currentBlock.txids) {
+        for (const tx of currentBlock.txids) {
+          this.txIds.delete(tx);
+        }
       }
+
       if (!currentBlock.previd) break;
-      currentBlock = await currentBlock.loadParent() as Block;
+      try {
+        currentBlock = (await currentBlock.loadParent()) as Block;
+        if (!currentBlock) break;
+      } catch (e) {
+        break;
+      }
     }
 
     await this.save();

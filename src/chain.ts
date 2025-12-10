@@ -1,9 +1,9 @@
 import { Block, blockManager } from './block';
 import { logger } from './logger';
 import { mempool } from './mempool';
-import {db, ObjectId, objectManager} from './object';
+import { db, ObjectId, objectManager } from './object';
 import * as rt from 'runtypes';
-import { ChainObject, ChainObjectType } from '@src/message';
+import { ChainObject, ChainObjectType } from './message';
 
 /**
  * Handles the blockchain state
@@ -15,7 +15,7 @@ enum Action {
 
 class ChainManager {
   chains: Set<ChainObjectType> = new Set<ChainObjectType>();
-  private head: Block | null = null;
+  head: Block | null = null;
   async init() {
     let chainsFromDb: ChainObjectType[] = [];
     if (await db.exists('chains')) {
@@ -40,14 +40,9 @@ class ChainManager {
   }
 
   async onValidBlockArrival(block: Block) {
-    // 1. Calculate the Block ID (Hash) first
-    // We assume objectManager.id() calculates the hash of the block object
     const blockId = objectManager.id(block);
-
-    // Calculate Head ID if we have a head
     const headId = this.head ? objectManager.id(this.head) : null;
 
-    // 2. Genesis Case
     if (!this.head) {
       this.head = block;
       await this.updateMempoolForBlock(block, Action.ADD);
@@ -56,13 +51,10 @@ class ChainManager {
       return;
     }
 
-    // 3. Duplicate Check
     if (blockId === headId) {
       return;
     }
 
-    // 4. Chain Extension (Happy Path)
-    // If the new block points to our current tip
     if (block.previd === headId) {
       this.head = block;
       await this.updateMempoolForBlock(block, Action.ADD);
@@ -71,34 +63,16 @@ class ChainManager {
       return;
     }
 
-    // 5. Reorganization Logic
     if (block.meta.height > this.head.meta.height) {
       logger.info(`Reorg triggered: Switching to new tip ${blockId}`);
 
-      const [lca, shortForkChain, longForkChain] = await Chain.getForks(this.head, block);
+      const [lca, shortForkChain, longForkChain] = await Chain.getForks(
+        this.head,
+        block,
+      );
 
       if (lca) {
-        const lcaId = objectManager.id(lca);
-
-        // A. Rollback (Disconnect Old Chain)
-        let currentOld = this.head;
-        while (objectManager.id(currentOld) !== lcaId && currentOld.previd) {
-          await this.updateMempoolForBlock(currentOld, Action.REMOVE); // remove from chain -> add to mempool
-          currentOld = await currentOld.loadParent() as Block;
-        }
-
-        // B. Rollforward (Connect New Chain)
-        const newPath: Block[] = [];
-        let currentNew = block;
-        while (objectManager.id(currentNew) !== lcaId && currentNew.previd) {
-          newPath.push(currentNew);
-          currentNew = await currentNew.loadParent() as Block;
-        }
-
-        for (const b of newPath.reverse()) {
-          await this.updateMempoolForBlock(b, Action.ADD); // add to chain -> remove from mempool
-        }
-
+        await mempool.reorg(lca, shortForkChain, longForkChain);
         this.head = block;
         await this.save();
       }
@@ -112,16 +86,12 @@ class ChainManager {
       if (action === Action.ADD) {
         mempool.remove(tx);
       } else {
-        // If block is removed from chain (reorg), add tx back to mempool
         mempool.add(tx);
       }
     });
   }
 }
 
-/**
- * Represents the current block chain state as a series of blocks
- */
 export class Chain {
   public tip: Block;
   public height: number;
@@ -136,38 +106,38 @@ export class Chain {
     this.height += 1;
   }
 
-  /**
-   * Find the lowest common ancestor (LCA) in two chains
-   * @param b1 a block belong to the current chain
-   * @param b2 a block belonging to a new, longer chain
-   * @returns [lca, lca..b1, lca..b2]
-   */
   static async getForks(b1: Block, b2: Block): Promise<[Block, Chain, Chain]> {
     let a = b1;
     let b = b2;
 
     while (a.meta.height > b.meta.height) {
-      if (a.previd == null) break;
-      a = await a.loadParent() as Block;
+      const p = await a.loadParent();
+      if (!p) break;
+      a = p;
     }
     while (b.meta.height > a.meta.height) {
-      if (b.previd == null) break;
-      b = await b.loadParent() as Block;
+      const p = await b.loadParent();
+      if (!p) break;
+      b = p;
     }
 
     while (objectManager.id(a) !== objectManager.id(b)) {
-      if (a.previd == null || b.previd == null) break;
-      a = await a.loadParent() as Block;
-      b = await b.loadParent() as Block;
+      const pa = await a.loadParent();
+      const pb = await b.loadParent();
+      if (!pa || !pb) break;
+      a = pa;
+      b = pb;
     }
     const lca = a;
 
     const shortFork: Block[] = [];
     let current = b1;
-    while (current.t !== lca.t) {
+    while (objectManager.id(current) !== objectManager.id(lca)) {
       if (!current.previd) break;
       shortFork.push(current);
-      current = await current.loadParent() as Block;
+      const p = await current.loadParent();
+      if (!p) break;
+      current = p;
     }
     shortFork.reverse();
 
@@ -176,16 +146,20 @@ export class Chain {
     while (objectManager.id(current) !== objectManager.id(lca)) {
       if (!current.previd) break;
       longFork.push(current);
-      current = await current.loadParent() as Block;
+      const p = await current.loadParent();
+      if (!p) break;
+      current = p;
     }
     longFork.reverse();
 
-    const shortForkChain = new Chain(shortFork[0]);
+    const shortForkTip = shortFork.length > 0 ? shortFork[0] : lca;
+    const shortForkChain = new Chain(shortForkTip);
     for (const block of shortFork.slice(1)) {
       await shortForkChain.addBlock(block);
     }
 
-    const longForkChain = new Chain(longFork[0]);
+    const longForkTip = longFork.length > 0 ? longFork[0] : lca;
+    const longForkChain = new Chain(longForkTip);
     for (const block of longFork.slice(1)) {
       await longForkChain.addBlock(block);
     }

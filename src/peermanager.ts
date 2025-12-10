@@ -2,6 +2,7 @@ import { db } from './object';
 import { logger } from './logger';
 import isValidHostname from 'is-valid-hostname';
 import * as rt from 'runtypes';
+import { Peer } from '@src/peer';
 
 const noBootstrapOption = parseInt(process.env.NO_BOOTSTRAP_PEERS ?? '0');
 
