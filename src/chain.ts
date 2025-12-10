@@ -173,7 +173,7 @@ export class Chain {
 
     const longFork: Block[] = [];
     current = b2;
-    while (current.t !== lca.t) {
+    while (objectManager.id(current) !== objectManager.id(lca)) {
       if (!current.previd) break;
       longFork.push(current);
       current = await current.loadParent() as Block;
