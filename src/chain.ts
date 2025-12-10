@@ -84,7 +84,7 @@ class ChainManager {
         let currentOld = this.head;
         while (objectManager.id(currentOld) !== lcaId && currentOld.previd) {
           await this.updateMempoolForBlock(currentOld, Action.REMOVE); // remove from chain -> add to mempool
-          currentOld = await blockManager.get(currentOld.previd);
+          currentOld = await currentOld.loadParent() as Block;
         }
 
         // B. Rollforward (Connect New Chain)
@@ -92,7 +92,7 @@ class ChainManager {
         let currentNew = block;
         while (objectManager.id(currentNew) !== lcaId && currentNew.previd) {
           newPath.push(currentNew);
-          currentNew = await blockManager.get(currentNew.previd);
+          currentNew = await currentNew.loadParent() as Block;
         }
 
         for (const b of newPath.reverse()) {
@@ -148,17 +148,17 @@ export class Chain {
 
     while (a.meta.height > b.meta.height) {
       if (a.previd == null) break;
-      a = await blockManager.get(a.previd);
+      a = await a.loadParent() as Block;
     }
     while (b.meta.height > a.meta.height) {
       if (b.previd == null) break;
-      b = await blockManager.get(b.previd);
+      b = await b.loadParent() as Block;
     }
 
     while (objectManager.id(a) !== objectManager.id(b)) {
       if (a.previd == null || b.previd == null) break;
-      a = await blockManager.get(a.previd);
-      b = await blockManager.get(b.previd);
+      a = await a.loadParent() as Block;
+      b = await b.loadParent() as Block;
     }
     const lca = a;
 
@@ -167,7 +167,7 @@ export class Chain {
     while (current.t !== lca.t) {
       if (!current.previd) break;
       shortFork.push(current);
-      current = await blockManager.get(current.previd);
+      current = await current.loadParent() as Block;
     }
     shortFork.reverse();
 
@@ -176,7 +176,7 @@ export class Chain {
     while (current.t !== lca.t) {
       if (!current.previd) break;
       longFork.push(current);
-      current = await blockManager.get(current.previd);
+      current = await current.loadParent() as Block;
     }
     longFork.reverse();
 

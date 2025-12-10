@@ -334,7 +334,7 @@ export class Peer {
           return this.fatalError(validation.error.name, validation.error.msg);
         } else {
           // store the block
-          blockManager.put(blk);
+          await blockManager.put(blk);
           // gossip to other peers
           network.broadcast(blk.hash());
         }

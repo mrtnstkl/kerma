@@ -112,7 +112,7 @@ class MemPool {
         }
       }
       if (!currentBlock.previd) break;
-      currentBlock = await blockManager.get(currentBlock.previd);
+      currentBlock = await currentBlock.loadParent() as Block;
     }
 
     // 2. Rollforward Long Fork (New Chain)
@@ -124,7 +124,7 @@ class MemPool {
         this.txIds.delete(tx);
       }
       if (!currentBlock.previd) break;
-      currentBlock = await blockManager.get(currentBlock.previd);
+      currentBlock = await currentBlock.loadParent() as Block;
     }
 
     await this.save();
