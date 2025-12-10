@@ -373,19 +373,12 @@ export class Peer {
 
     const blockId = msg.blockId;
 
-    // 1. Check if we already have this object
     if (!(await objectManager.exists(blockId))) {
       this.info(`Received Chain tip for unknown block ${blockId}. Requesting from all peers...`);
-
-      // Trigger chain validation by requesting the tip.
-      // We broadcast the request to ALL peers as required.
       const getObjectMsg: GetObjectMessageType = {
         type: 'getobject',
         objectid: blockId,
       };
-
-      // Assuming peerManager has a list of active peers we can iterate
-      // You might need to import { peerManager } from './peermanager';
       if (typeof network !== 'undefined' && network.peers) {
         network.peers.forEach((peer) => {
           if (peer.peerAddr !== this.peerAddr) {
@@ -396,16 +389,12 @@ export class Peer {
       return;
     }
 
-    // 2. We have the object. Retrieve it to check validity.
     const obj = await objectManager.get(blockId);
-
-    // 3. Verify it is actually a BLOCK (not a transaction)
     if (!BlockObject.guard(obj)) {
       this.debug(`ChainTip referenced a non-block object: ${blockId}`);
       return this.fatalError('INVALID_FORMAT', `Object ${blockId} is not a block.`);
     }
 
-    // 4. Verify Block Validity (specifically Proof of Work)
     try {
       const block = await Block.fromNetworkObject(obj);
       const validation = await block.validate();
@@ -417,10 +406,6 @@ export class Peer {
           `Block ${blockId} has invalid PoW or structure.`,
         );
       }
-
-      // If valid, we do nothing.
-      // The existence of a valid block in our DB means it's likely already processed
-      // by chainManager via onValidBlockArrival when it first arrived.
     } catch (e) {
       this.warn(`Error validating ChainTip block: ${e}`);
       return this.fatalError('INVALID_FORMAT', `Could not validate block ${blockId}`);

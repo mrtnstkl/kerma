@@ -66,10 +66,7 @@ class ChainManager {
     if (block.meta.height > this.head.meta.height) {
       logger.info(`Reorg triggered: Switching to new tip ${blockId}`);
 
-      const [lca, shortForkChain, longForkChain] = await Chain.getForks(
-        this.head,
-        block,
-      );
+      const [lca, shortForkChain, longForkChain] = await Chain.getForks(this.head, block);
 
       if (lca) {
         await mempool.reorg(lca, shortForkChain, longForkChain);

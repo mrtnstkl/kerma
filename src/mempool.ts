@@ -119,7 +119,10 @@ class MemPool {
         if (!parent) break;
         currentBlock = parent;
       } catch (e) {
-        logger.error(`Mempool Reorg: Failed to load parent of block ${objectManager.id(currentBlock)} on long fork`, e);
+        logger.error(
+          `Mempool Reorg: Failed to load parent of block ${objectManager.id(currentBlock)} on long fork`,
+          e,
+        );
         break;
       }
     }
@@ -128,7 +131,7 @@ class MemPool {
 
     while (objectManager.id(currentBlock) !== objectManager.id(lca)) {
       if (currentBlock.txids && currentBlock.txids.length > 0) {
-        const orphansToRescue = currentBlock.txids.filter(tx => !confirmedTxIds.has(tx));
+        const orphansToRescue = currentBlock.txids.filter((tx) => !confirmedTxIds.has(tx));
 
         await Promise.all(
           orphansToRescue.map(async (tx) => {
@@ -138,16 +141,14 @@ class MemPool {
                 logger.warn(`Mempool Reorg: Missing data for tx ${tx} during rescue.`);
                 return;
               }
-              const txObj = Transaction.fromNetworkObject(
-                txData as TransactionObjectType,
-              );
+              const txObj = Transaction.fromNetworkObject(txData as TransactionObjectType);
               if (!txObj.isCoinbase()) {
                 this.txIds.add(tx);
               }
             } catch (e) {
               logger.error(`Mempool Reorg: Error rescuing transaction ${tx}`, e);
             }
-          })
+          }),
         );
       }
 
@@ -158,7 +159,10 @@ class MemPool {
         if (!parent) break;
         currentBlock = parent;
       } catch (e) {
-        logger.error(`Mempool Reorg: Failed to load parent of block ${objectManager.id(currentBlock)} on short fork`, e);
+        logger.error(
+          `Mempool Reorg: Failed to load parent of block ${objectManager.id(currentBlock)} on short fork`,
+          e,
+        );
         break;
       }
     }
