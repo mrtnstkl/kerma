@@ -106,6 +106,15 @@ export class MessageSocket extends EventEmitter {
       crlfDelay: Infinity, // TODO: Read in the description if it's defined
     });
 
+    netSocket.on('error', (err) => {
+      logger.warn('Error on MessageSocket');
+      this.readlineInterface.close();
+    });
+
+    this.readlineInterface.on('error', (err) => {
+      logger.warn('Readline interface had an error');
+    });
+
     this.readlineInterface.on('line', (line) => {
       this.emit('message', line);
     });

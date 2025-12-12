@@ -12,7 +12,7 @@ export type Signature = string;
 export async function ver(sig: Signature, message: string, pubkey: PublicKey) {
   try {
     const encodedMessage = new TextEncoder().encode(message);
-    return verify(sig, encodedMessage, pubkey);
+    return await verify(sig, encodedMessage, pubkey);
   } catch (error) {
     return false;
   }
