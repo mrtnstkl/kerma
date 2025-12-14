@@ -19,7 +19,7 @@ import { error } from 'winston';
 import { Array, Boolean, Number, Record, Static, String } from 'runtypes';
 import assert from 'assert';
 
-const TARGET = '0000abc000000000000000000000000000000000000000000000000000000000'; /* TODO */
+export const TARGET = '0000abc000000000000000000000000000000000000000000000000000000000'; /* TODO */
 const GENESIS: BlockObjectType = {
   T: '0000abc000000000000000000000000000000000000000000000000000000000',
   created: 1671062400,
@@ -34,9 +34,24 @@ const GENESIS_HASH = '00002fa163c7dab0991544424b9fd302bb1782b185e5a3bbdf12afb758
 const BU = 10 ** 12;
 const BLOCK_REWARD = 50 * BU;
 
+class ObjectNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ObjectNotFoundError';
+  }
+}
+
 export class BlockManager {
   async get(blockid: ObjectId): Promise<Block> {
-    const block = BlockObject.check(await objectManager.get(blockid));
+    let object: ObjectType;
+
+    try {
+      object = await objectManager.get(blockid);
+    } catch {
+      throw new ObjectNotFoundError(`Object with id: ${blockid} not found`);
+    }
+
+    const block = BlockObject.check(object);
     let meta;
     if (await db.exists(`object:${blockid}:meta`)) {
       meta = BlockMetaObject.check(await db.get(`object:${blockid}:meta`));
@@ -318,20 +333,36 @@ export class Block {
       return { success: true };
     }
 
+    if (this.previd! >= TARGET) {
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'INVALID_ANCESTRY',
+          msg: 'Parent block has incorrect PoW',
+        },
+      };
+    }
+
     let transactions: { tx: Transaction; txid: string }[];
+
     try {
       transactions = await this.getTxs();
     } catch (e) {
-      if (e instanceof Error && e.message == 'INVALID_FORMAT error during transaction fetching') {
+      if (
+        this.txids.some((txid) => objectManager.objectErrors.has(txid)) ||
+        (e instanceof Error && e.message == 'INVALID_FORMAT error during transaction fetching')
+      ) {
         return {
           success: false,
           error: {
             type: 'error',
-            name: 'INVALID_FORMAT',
-            msg: `One or more transactions had invalid format: Message: ${e.message}`,
+            name: 'INVALID_ANCESTRY',
+            msg: `One or more transactions had invalid format`,
           },
         };
       }
+
       return {
         success: false,
         error: {
@@ -342,19 +373,60 @@ export class Block {
       };
     }
 
-    let previousBlock: Block;
+    let previousBlock: Block | null = null;
 
     try {
       previousBlock = await blockManager.get(this.previd!);
-    } catch {
-      return {
-        success: false,
-        error: {
-          type: 'error',
-          name: 'UNFINDABLE_OBJECT',
-          msg: `Could not find previous block.`,
-        },
-      };
+    } catch (err) {
+      if (err instanceof ObjectNotFoundError) {
+        try {
+          await objectManager.getFromNetwork(this.previd!);
+        } catch {
+          return {
+            success: false,
+            error: {
+              type: 'error',
+              name: 'UNFINDABLE_OBJECT',
+              msg: `Could not find previous block.`,
+            },
+          };
+        }
+      } else {
+        return {
+          success: false,
+          error: {
+            type: 'error',
+            name: 'INVALID_FORMAT',
+            msg: `Invalid format of the previous block.`,
+          },
+        };
+      }
+    }
+
+    if (previousBlock === null) {
+      try {
+        previousBlock = await blockManager.get(this.previd!);
+      } catch (err) {
+        if (err instanceof ObjectNotFoundError) {
+          return {
+            success: false,
+            error: {
+              type: 'error',
+              name: 'UNFINDABLE_OBJECT',
+              msg: `Could not find previous block.`,
+            },
+          };
+        } else {
+          return {
+            success: false,
+            error: {
+              type: 'error',
+              name: 'INVALID_ANCESTRY',
+              msg: `Invalid ancestry of the block.`,
+            },
+          };
+        }
+      }
     }
 
     if (this.created <= previousBlock.created || this.created > Math.floor(Date.now() / 1000)) {

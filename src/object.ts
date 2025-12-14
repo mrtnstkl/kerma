@@ -38,6 +38,7 @@ export type ValidationResultType = Static<typeof ValidationResult>;
  */
 class ObjectManager {
   objectRequests: Map<ObjectId, Set<Deferred<ObjectType>>> = new Map();
+  objectErrors: Map<ObjectId, ErrorMessageType> = new Map();
 
   /**
    * Clears all objects from the database
@@ -122,6 +123,14 @@ class ObjectManager {
     }
     this.objectRequests.delete(objectid);
     return objectid;
+  }
+
+  rejectDeferred(objectId: ObjectId, error: ErrorMessageType) {
+    this.objectErrors.set(objectId, error);
+
+    for (const promise of this.objectRequests.get(objectId) ?? []) {
+      promise.reject('Object validation failed');
+    }
   }
 
   /**

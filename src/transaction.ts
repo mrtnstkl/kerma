@@ -203,6 +203,59 @@ export class Transaction {
     return this.inputs === undefined || this.inputs.length === 0;
   }
 
+  private static async validateInput(
+    input: Input,
+    canonicalTransactionString: string,
+  ): Promise<{ success: true; output: Output } | { success: false; error: ErrorMessageType }> {
+    let referencedOutput: Output;
+
+    try {
+      referencedOutput = await input.outpoint.resolve();
+    } catch (err) {
+      if (!(err instanceof ObjectNotFoundError || err instanceof InvalidOutpointError)) {
+        const error: ErrorMessageType = {
+          type: 'error',
+          msg: 'Unknown error.',
+          name: 'INVALID_FORMAT',
+        };
+        return { success: false, error };
+      }
+
+      const error: ErrorMessageType = {
+        type: 'error',
+        msg: err.message,
+        name: err instanceof ObjectNotFoundError ? 'UNKNOWN_OBJECT' : 'INVALID_TX_OUTPOINT',
+      };
+
+      return { success: false, error };
+    }
+
+    // Check the signature at the end, so that the prerequisite for the signature check is perfectly correct transaction.
+
+    const { sig } = input;
+    const { pubkey } = referencedOutput;
+
+    if (sig === null) {
+      const error: ErrorMessageType = {
+        type: 'error',
+        msg: `Input signature is missing for ${input.outpoint.txid}:${input.outpoint.index}`,
+        name: 'INVALID_FORMAT',
+      };
+      return { success: false, error };
+    }
+
+    if (!(await ver(sig, canonicalTransactionString, pubkey))) {
+      const error: ErrorMessageType = {
+        type: 'error',
+        msg: `Invalid signature for input ${input.outpoint.txid}:${input.outpoint.index}`,
+        name: 'INVALID_TX_SIGNATURE',
+      };
+      return { success: false, error };
+    }
+
+    return { success: true, output: referencedOutput };
+  }
+
   static async validateTransaction(txObj: TransactionObjectType): Promise<ValidationResultType> {
     const txInstance = Transaction.fromNetworkObject(txObj);
 
@@ -229,53 +282,79 @@ export class Transaction {
     const unsignedTxObject = txInstance.toNetworkObject(false);
     const canonicalString = objectManager.toCanonicalString(unsignedTxObject);
 
+    const inputsToFetch: Input[] = [];
+
     for (const input of txInstance.inputs) {
-      let referencedOutput: Output;
+      const response = await this.validateInput(input, canonicalString);
 
-      try {
-        referencedOutput = await input.outpoint.resolve();
-      } catch (err) {
-        if (!(err instanceof ObjectNotFoundError || err instanceof InvalidOutpointError)) {
-          const error: ErrorMessageType = {
+      if (response.success === true) {
+        totalInputValue += response.output.value;
+        continue;
+      }
+
+      if (response.error.name === 'UNKNOWN_OBJECT') {
+        inputsToFetch.push(input);
+        continue;
+      }
+
+      return response;
+    }
+
+    try {
+      await Promise.all(
+        inputsToFetch.map((input) => objectManager.getFromNetwork(input.outpoint.txid)),
+      );
+    } catch (error) {
+      if (inputsToFetch.some((input) => objectManager.objectErrors.has(input.outpoint.txid))) {
+        return {
+          success: false,
+          error: {
             type: 'error',
-            msg: 'Unknown error.',
-            name: 'INVALID_FORMAT',
-          };
-          return { success: false, error };
-        }
-
-        const error: ErrorMessageType = {
-          type: 'error',
-          msg: err.message,
-          name: err instanceof ObjectNotFoundError ? 'UNKNOWN_OBJECT' : 'INVALID_TX_OUTPOINT',
+            name: 'INVALID_ANCESTRY',
+            msg: 'Invalid ancestry of an object.',
+          },
         };
-        return { success: false, error };
       }
 
-      totalInputValue += referencedOutput.value;
-
-      // Check the signature at the end, so that the prerequisite for the signature check is perfectly correct transaction.
-
-      const { sig } = input;
-      const { pubkey } = referencedOutput;
-
-      if (sig === null) {
-        const error: ErrorMessageType = {
+      return {
+        success: false,
+        error: {
           type: 'error',
-          msg: `Input signature is missing for ${input.outpoint.txid}:${input.outpoint.index}`,
-          name: 'INVALID_FORMAT',
-        };
-        return { success: false, error };
+          name: 'UNFINDABLE_OBJECT',
+          msg: 'Could not fetch objects under 5 seconds',
+        },
+      };
+    }
+
+    for (const input of inputsToFetch) {
+      const response = await this.validateInput(input, canonicalString);
+
+      if (response.success === true) {
+        totalInputValue += response.output.value;
+        continue;
       }
 
-      if (!(await ver(sig, canonicalString, pubkey))) {
-        const error: ErrorMessageType = {
-          type: 'error',
-          msg: `Invalid signature for input ${input.outpoint.txid}:${input.outpoint.index}`,
-          name: 'INVALID_TX_SIGNATURE',
+      if (response.error.name === 'UNKNOWN_OBJECT') {
+        return {
+          success: false,
+          error: {
+            type: 'error',
+            name: 'UNFINDABLE_OBJECT',
+            msg: 'Could not fetch objects under 5 seconds',
+          },
         };
-        return { success: false, error };
       }
+
+      return {
+        success: false,
+        error: {
+          type: 'error',
+          name: 'INVALID_ANCESTRY',
+          msg: 'Invalid ancestry of an object.',
+        },
+      };
+
+      return response;
     }
 
     if (!txInstance.isCoinbase() && totalInputValue < totalOutputValue) {
