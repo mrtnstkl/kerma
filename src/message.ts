@@ -143,7 +143,7 @@ export type GetChainTipMessageType = Static<typeof GetChainTipMessage>;
 
 export const ChainTipMessage = Record({
   type: Literal('chaintip'),
-  blockId: Hash,
+  blockid: Hash,
 });
 export type ChainTipMessageType = Static<typeof ChainTipMessage>;
 

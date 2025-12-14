@@ -115,7 +115,7 @@ export class Peer {
   async sendChainTip(blockid: ObjectId) {
     const chainTip: ChainTipMessageType = {
       type: 'chaintip',
-      blockId: blockid,
+      blockid: blockid,
     };
     this.sendMessage(chainTip);
   }
@@ -371,7 +371,7 @@ export class Peer {
       return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS);
     }
 
-    const blockId = msg.blockId;
+    const blockId = msg.blockid;
 
     if (!(await objectManager.exists(blockId))) {
       this.info(`Received Chain tip for unknown block ${blockId}. Requesting from all peers...`);
