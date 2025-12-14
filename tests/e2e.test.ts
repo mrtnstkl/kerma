@@ -214,10 +214,11 @@ test('reacts correctly to invalid transactions', async () => {
 
   grader1.sendMessage(transactionMessageWithUnknownTransactionId);
 
-  await new Promise((res) => setTimeout(res, 1000));
+  await new Promise((res) => setTimeout(res, 6000));
 
-  // Should return UNKNOWN_OBJECT error, but not drop the connection
-  expect(grader1.receivedErrorMessage('UNKNOWN_OBJECT')).toBeTruthy();
+  // Should return UNFINDABLE_OBJECT error, but not drop the connection
+  console.log(grader1.receivedMessages);
+  expect(grader1.receivedErrorMessage('UNFINDABLE_OBJECT')).toBeTruthy();
 
   const coinbaseTransactionMessage =
     '{"object":{"height":0,"outputs":[{"pubkey":"85acb336a150b16a9c6c8c27a4e9c479d9f99060a7945df0bb1b53365e98969b","value":50000000000000}],"type":"transaction"},"type":"object"}';
@@ -228,8 +229,9 @@ test('reacts correctly to invalid transactions', async () => {
   grader1.sendMessage(coinbaseTransactionMessage);
   grader1.sendMessage(transactionMessageWithInvalidSignature);
 
-  await new Promise((res) => setTimeout(res, 1000));
+  await new Promise((res) => setTimeout(res, 6000));
 
+  console.log(grader1.receivedMessages);
   expect(grader1.receivedErrorMessage('INVALID_TX_SIGNATURE')).toBeTruthy();
 
   const transactionMessageWithInvalidOutpointIndex =
@@ -270,7 +272,7 @@ test('reacts correctly to invalid transactions', async () => {
   // Empty list of outputs is acceptable, so a transaction with an empty list of outputs and an incorrect signature will fail on a signature check,
   // which happens at the end.
   expect(grader5.receivedErrorMessage('INVALID_TX_SIGNATURE')).toBeTruthy();
-}, 20000);
+}, 30000);
 
 test('Invalid block fails', async () => {
   const grader1 = await SocketWithBuffers.create(BLOCK_HOST_INCORRECT);

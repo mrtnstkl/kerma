@@ -345,6 +345,10 @@ export class Transaction {
         };
       }
 
+      if (response.error.name === 'INVALID_TX_SIGNATURE') {
+        return response;
+      }
+
       return {
         success: false,
         error: {
