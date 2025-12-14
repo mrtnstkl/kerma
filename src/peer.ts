@@ -379,13 +379,12 @@ export class Peer {
         type: 'getobject',
         objectid: blockId,
       };
-      if (typeof network !== 'undefined' && network.peers) {
-        network.peers.forEach((peer) => {
-          if (peer.peerAddr !== this.peerAddr) {
-            peer.sendMessage(getObjectMsg);
-          }
-        });
-      }
+
+      network.peers.forEach((peer) => {
+        if (peer.peerAddr !== this.peerAddr) {
+          peer.sendMessage(getObjectMsg);
+        }
+      });
       return;
     }
 
@@ -401,10 +400,7 @@ export class Peer {
 
       if (!validation.success) {
         this.debug(`ChainTip block is invalid: ${validation.error.msg}`);
-        return this.fatalError(
-          'INVALID_BLOCK_POW',
-          `Block ${blockId} has invalid PoW or structure.`,
-        );
+        return this.fatalError(validation.error.name, validation.error.msg);
       }
     } catch (e) {
       this.warn(`Error validating ChainTip block: ${e}`);
