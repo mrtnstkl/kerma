@@ -131,6 +131,8 @@ class ObjectManager {
     for (const promise of this.objectRequests.get(objectId) ?? []) {
       promise.reject('Object validation failed');
     }
+
+    this.objectRequests.delete(objectId);
   }
 
   /**

@@ -321,7 +321,10 @@ export class Peer {
           objectManager.rejectDeferred(objectId, validation.error);
 
           this.debug(`Received object is invalid: ${validation.error.msg}`);
-          if (validation.error.name === 'UNKNOWN_OBJECT') {
+          if (
+            validation.error.name === 'UNKNOWN_OBJECT' ||
+            validation.error.name === 'UNFINDABLE_OBJECT'
+          ) {
             return this.sendError(validation.error.name, validation.error.msg);
           } else {
             return this.fatalError(validation.error.name, validation.error.msg);
