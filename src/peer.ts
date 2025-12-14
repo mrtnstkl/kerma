@@ -31,6 +31,7 @@ import {
   TransactionObject,
   GeneralTransactionObject,
   BlockObject,
+  ObjectType,
 } from './message';
 import { peerManager } from './peermanager';
 import { db, objectManager } from './object';
@@ -40,7 +41,7 @@ import { chainManager } from './chain';
 import { mempool } from './mempool';
 import { Transaction } from './transaction';
 import { match, when } from 'runtypes';
-import { Block, blockManager } from './block';
+import { Block, blockManager, TARGET } from './block';
 
 const VERSION = '0.10.0';
 const NAME = 'b0b3r';
@@ -107,10 +108,17 @@ export class Peer {
     this.sendMessage(getobject);
   }
   async sendGetChainTip() {
-    /* TODO */
+    const getChainTip: GetChainTipMessageType = {
+      type: 'getchaintip',
+    };
+    this.sendMessage(getChainTip);
   }
   async sendChainTip(blockid: ObjectId) {
-    /* TODO */
+    const chainTip: ChainTipMessageType = {
+      type: 'chaintip',
+      blockid: blockid,
+    };
+    this.sendMessage(chainTip);
   }
   async sendGetMempool() {
     /* TODO */
@@ -142,17 +150,19 @@ export class Peer {
       this.fail();
     });
   }
+
   async fail() {
-    /* TODO */
     peerManager.peerFailed(this.peerAddr);
     this.info(`closing connection`);
     this.socket.end();
   }
+
   async onConnect() {
     this.info(`onConnect called`);
-    this.sendHello();
+    await this.sendHello();
     //immediately request for known peers
-    this.sendGetPeers();
+    await this.sendGetPeers();
+    await this.sendGetChainTip();
 
     setTimeout(() => {
       if (!this.handshakeCompleted) {
@@ -163,6 +173,7 @@ export class Peer {
       }
     }, HANDSHAKE_WAIT_TIME);
   }
+
   async onMessage(message: string) {
     this.debug(`Message arrival: ${message}`);
 
@@ -306,8 +317,14 @@ export class Peer {
         const validation = await Transaction.validate(transaction);
 
         if (!validation.success) {
+          const objectId = objectManager.id(transaction);
+          objectManager.rejectDeferred(objectId, validation.error);
+
           this.debug(`Received object is invalid: ${validation.error.msg}`);
-          if (validation.error.name === 'UNKNOWN_OBJECT') {
+          if (
+            validation.error.name === 'UNKNOWN_OBJECT' ||
+            validation.error.name === 'UNFINDABLE_OBJECT'
+          ) {
             return this.sendError(validation.error.name, validation.error.msg);
           } else {
             return this.fatalError(validation.error.name, validation.error.msg);
@@ -325,6 +342,8 @@ export class Peer {
         const validation = await blk.validate();
         if (!validation.success) {
           this.debug(`Received block is invalid: ${validation.error.msg}`);
+          const objectId = objectManager.id(block);
+          objectManager.rejectDeferred(objectId, validation.error);
 
           // Some errors should not be fatal
           if (validation.error.name === 'UNFINDABLE_OBJECT') {
@@ -334,7 +353,8 @@ export class Peer {
           return this.fatalError(validation.error.name, validation.error.msg);
         } else {
           // store the block
-          blockManager.put(blk);
+          await blockManager.put(blk);
+          await chainManager.onValidBlockArrival(blk);
           // gossip to other peers
           network.broadcast(blk.hash());
         }
@@ -345,13 +365,72 @@ export class Peer {
     if (this.hasExtraFields(msg, GetChainTipMessage.fields)) {
       return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS);
     }
-    /* TODO */
+    // check if we have the object
+    if (chainManager.head) {
+      // we do, so send it
+      this.info(`Sending chain tip to peer`);
+      await this.sendChainTip(objectManager.id(chainManager.head));
+    } else {
+      this.debug(`Chain tip not found locally, sending error message`);
+      return this.sendError('UNKNOWN_OBJECT', `Chain tip not found`);
+    }
   }
   async onMessageChainTip(msg: ChainTipMessageType) {
     if (this.hasExtraFields(msg, ChainTipMessage.fields)) {
       return this.fatalError('INVALID_FORMAT', ERROR_MESSAGES.ILLEGAL_FIELDS);
     }
-    /* TODO */
+
+    if (msg.blockid >= TARGET) {
+      return this.fatalError('INVALID_BLOCK_POW', 'Invalid block POW');
+    }
+
+    const blockId = msg.blockid;
+    let object: ObjectType;
+
+    try {
+      object = await objectManager.getFromNetwork(blockId);
+    } catch (error) {
+      const errorObject = objectManager.objectErrors.get(blockId);
+
+      if (errorObject !== undefined) {
+        return this.fatalError('INVALID_ANCESTRY', errorObject.msg);
+      }
+
+      return this.sendError('UNFINDABLE_OBJECT', 'Could not block referenced by the chain id');
+    }
+
+    // if (!(await objectManager.exists(blockId))) {
+    //   this.info(`Received Chain tip for unknown block ${blockId}. Requesting from all peers...`);
+    //   const getObjectMsg: GetObjectMessageType = {
+    //     type: 'getobject',
+    //     objectid: blockId,
+    //   };
+    //
+    //   network.peers.forEach((peer) => {
+    //     if (peer.peerAddr !== this.peerAddr) {
+    //       peer.sendMessage(getObjectMsg);
+    //     }
+    //   });
+    //   return;
+    // }
+
+    if (object.type === 'transaction') {
+      this.debug(`ChainTip referenced a non-block object: ${blockId}`);
+      return this.fatalError('INVALID_FORMAT', `Object ${blockId} is not a block.`);
+    }
+
+    try {
+      const block = await Block.fromNetworkObject(object);
+      const validation = await block.validate();
+
+      if (!validation.success) {
+        this.debug(`ChainTip block is invalid: ${validation.error.msg}`);
+        return this.fatalError(validation.error.name, validation.error.msg);
+      }
+    } catch (e) {
+      this.warn(`Error validating ChainTip block: ${e}`);
+      return this.fatalError('INVALID_FORMAT', `Could not validate block ${blockId}`);
+    }
   }
   async onMessageGetMempool(msg: GetMempoolMessageType) {
     if (this.hasExtraFields(msg, GetMempoolMessage.fields)) {

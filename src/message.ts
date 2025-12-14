@@ -138,13 +138,12 @@ export type ChainObjectType = Static<typeof ChainObject>;
 
 export const GetChainTipMessage = Record({
   type: Literal('getchaintip'),
-  /* TODO: finish this type */
 });
 export type GetChainTipMessageType = Static<typeof GetChainTipMessage>;
 
 export const ChainTipMessage = Record({
   type: Literal('chaintip'),
-  /* TODO: finish this type */
+  blockid: Hash,
 });
 export type ChainTipMessageType = Static<typeof ChainTipMessage>;
 

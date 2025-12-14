@@ -34,7 +34,7 @@ async function main() {
       logger.info(`Object ID: ${id}, Object: %o`, obj);
     }
   });
-  network.init(port, BIND_IP);
+  await network.init(port, BIND_IP);
 }
 
 main();

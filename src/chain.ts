@@ -1,15 +1,21 @@
 import { Block, blockManager } from './block';
 import { logger } from './logger';
 import { mempool } from './mempool';
-import { db, ObjectId } from './object';
+import { db, ObjectId, objectManager } from './object';
 import * as rt from 'runtypes';
-import { ChainObject, ChainObjectType } from '@src/message';
+import { ChainObject, ChainObjectType } from './message';
 
 /**
  * Handles the blockchain state
  */
+enum Action {
+  ADD = 'add',
+  REMOVE = 'remove',
+}
+
 class ChainManager {
   chains: Set<ChainObjectType> = new Set<ChainObjectType>();
+  head: Block | null = null;
   async init() {
     let chainsFromDb: ChainObjectType[] = [];
     if (await db.exists('chains')) {
@@ -32,14 +38,57 @@ class ChainManager {
     }
     logger.info(`Stored %d chains to database`, this.chains.size);
   }
+
   async onValidBlockArrival(block: Block) {
-    /* TODO */
+    const blockId = objectManager.id(block);
+    const headId = this.head ? objectManager.id(this.head) : null;
+
+    if (!this.head) {
+      this.head = block;
+      await this.updateMempoolForBlock(block, Action.ADD);
+      await this.save();
+      logger.info(`Genesis block initialized at height ${block.meta.height}`);
+      return;
+    }
+
+    if (blockId === headId) {
+      return;
+    }
+
+    if (block.previd === headId) {
+      this.head = block;
+      await this.updateMempoolForBlock(block, Action.ADD);
+      logger.info(`Chain extended to height ${block.meta.height}`);
+      await this.save();
+      return;
+    }
+
+    if (block.meta.height > this.head.meta.height) {
+      logger.info(`Reorg triggered: Switching to new tip ${blockId}`);
+
+      const [lca, shortForkChain, longForkChain] = await Chain.getForks(this.head, block);
+
+      if (lca) {
+        await mempool.reorg(lca, shortForkChain, longForkChain);
+        this.head = block;
+        await this.save();
+      }
+    }
+  }
+
+  async updateMempoolForBlock(block: Block, action: Action) {
+    if (!block.txids) return;
+
+    block.txids.forEach((tx) => {
+      if (action === Action.ADD) {
+        mempool.remove(tx);
+      } else {
+        mempool.add(tx);
+      }
+    });
   }
 }
 
-/**
- * Represents the current block chain state as a series of blocks
- */
 export class Chain {
   public tip: Block;
   public height: number;
@@ -54,56 +103,60 @@ export class Chain {
     this.height += 1;
   }
 
-  /**
-   * Find the lowest common ancestor (LCA) in two chains
-   * @param b1 a block belong to the current chain
-   * @param b2 a block belonging to a new, longer chain
-   * @returns [lca, lca..b1, lca..b2]
-   */
   static async getForks(b1: Block, b2: Block): Promise<[Block, Chain, Chain]> {
     let a = b1;
     let b = b2;
 
     while (a.meta.height > b.meta.height) {
-      if (a.previd == null) break;
-      a = await blockManager.get(a.previd);
+      const p = await a.loadParent();
+      if (!p) break;
+      a = p;
     }
     while (b.meta.height > a.meta.height) {
-      if (b.previd == null) break;
-      b = await blockManager.get(b.previd);
+      const p = await b.loadParent();
+      if (!p) break;
+      b = p;
     }
 
-    while (a.t !== b.t) {
-      if (a.previd == null || b.previd == null) break;
-      a = await blockManager.get(a.previd);
-      b = await blockManager.get(b.previd);
+    while (objectManager.id(a) !== objectManager.id(b)) {
+      const pa = await a.loadParent();
+      const pb = await b.loadParent();
+      if (!pa || !pb) break;
+      a = pa;
+      b = pb;
     }
     const lca = a;
 
     const shortFork: Block[] = [];
     let current = b1;
-    while (current.t !== lca.t) {
+    while (objectManager.id(current) !== objectManager.id(lca)) {
       if (!current.previd) break;
       shortFork.push(current);
-      current = await blockManager.get(current.previd);
+      const p = await current.loadParent();
+      if (!p) break;
+      current = p;
     }
     shortFork.reverse();
 
     const longFork: Block[] = [];
     current = b2;
-    while (current.t !== lca.t) {
+    while (objectManager.id(current) !== objectManager.id(lca)) {
       if (!current.previd) break;
       longFork.push(current);
-      current = await blockManager.get(current.previd);
+      const p = await current.loadParent();
+      if (!p) break;
+      current = p;
     }
     longFork.reverse();
 
-    const shortForkChain = new Chain(shortFork[0]);
+    const shortForkTip = shortFork.length > 0 ? shortFork[0] : lca;
+    const shortForkChain = new Chain(shortForkTip);
     for (const block of shortFork.slice(1)) {
       await shortForkChain.addBlock(block);
     }
 
-    const longForkChain = new Chain(longFork[0]);
+    const longForkTip = longFork.length > 0 ? longFork[0] : lca;
+    const longForkChain = new Chain(longForkTip);
     for (const block of longFork.slice(1)) {
       await longForkChain.addBlock(block);
     }
