@@ -10,6 +10,8 @@ build:
 clean: remove-submission remove-test
 	rm -rf node_modules
 	# add further actions if needed
+	rm -rf db
+	rm -rf dist
 
 # add own tests if you want
 run-tests:
@@ -30,7 +32,7 @@ docker-down:
 
 submission:
 	mkdir -p _submission
-	tar --exclude='./node_modules' --exclude='./_submission' --exclude='./_test' -czf _submission/submission.tgz .
+	tar --exclude='./.idea' --exclude='./.git' --exclude='./node_modules' --exclude='./_submission' --exclude='./_test' -czf _submission/submission.tgz .
 	@echo Finished creating submission archive _submission/submission.tgz
 	@echo Run make check-submission now to check if our automated grader will be able to connect to it
 

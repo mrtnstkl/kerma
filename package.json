@@ -12,7 +12,9 @@
   "dependencies": {
     "@noble/ed25519": "^1.6.0",
     "@types/semver": "^7.3.9",
+    "blakejs": "^1.2.1",
     "is-valid-hostname": "^1.0.2",
+    "json-canonicalize": "^1.0.4",
     "level-ts": "^2.1.0",
     "net": "^1.0.2",
     "runtypes": "^6.5.1",
