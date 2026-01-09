@@ -54,6 +54,12 @@ class ObjectManager {
           const tx: Transaction = Transaction.fromNetworkObject(obj)
           logger.debug(`Validating transaction: ${tx.txid}`)
           await tx.validate()
+          if (!tx.isCoinbase()) {
+            const success: boolean = await mempool.onTransactionArrival(tx)
+            if (!success) {
+              throw new Error('Failed to add transaction to mempool')
+            }
+          }
         },
         async (obj: BlockObjectType) => {
           const block = await Block.fromNetworkObject(obj)
