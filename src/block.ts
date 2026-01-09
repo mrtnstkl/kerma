@@ -58,7 +58,7 @@ export class Block {
   note: string | undefined
   blockid: string
   fees: number | undefined
-  stateAfter: UTXOSet | undefined
+  utxosAfter: UTXOSet | undefined
   height: number | undefined
   valid: boolean = false
 
@@ -69,7 +69,7 @@ export class Block {
   public static async makeGenesis(): Promise<Block> {
     const genesis = await Block.fromNetworkObject(GENESIS)
     genesis.valid = true
-    genesis.stateAfter = new UTXOSet(new Set<string>())
+    genesis.utxosAfter = new UTXOSet(new Set<string>())
     genesis.height = 0
     await genesis.save()
 
@@ -276,7 +276,7 @@ export class Block {
       }
     }
 
-    this.stateAfter = stateAfter
+    this.utxosAfter = stateAfter
     logger.debug(`UTXO state of block ${this.blockid} cached: ${JSON.stringify(Array.from(stateAfter.outpoints))}`)
   }
 
@@ -305,7 +305,7 @@ export class Block {
   }
 
   /**
-   * TODO: Validates the ancestry of this block until a block that has already been verified is hit
+   * Validates the ancestry of this block until a block that has already been verified is hit
    * @returns parent Block if valid, otherwise null
    */
   async validateAncestry(peer: Peer): Promise<Block | null> {
@@ -413,7 +413,7 @@ export class Block {
         logger.debug(`Block ${this.blockid} has height ${this.height}.`)
 
         // this block's starting state is the previous block's ending state
-        stateBefore = parentBlock.stateAfter
+        stateBefore = parentBlock.utxosAfter
         logger.debug(`Loaded state before block ${this.blockid}`)
       }
       logger.debug(`Block ${this.blockid} has valid ancestry`)
@@ -445,13 +445,13 @@ export class Block {
    * save this block (alongside meta information) in the database
    */
   async save() {
-    if (this.stateAfter === undefined) {
+    if (this.utxosAfter === undefined) {
       throw new Error(`Cannot save block ${this.blockid} with uncalculate state`) // assert: false
     }
 
     await db.put(`blockinfo:${this.blockid}`, {
       height: this.height,
-      stateAfterOutpoints: Array.from(this.stateAfter.outpoints)
+      stateAfterOutpoints: Array.from(this.utxosAfter.outpoints)
     })
     logger.debug(`Stored valid block ${this.blockid} metadata.`)
   }
@@ -467,7 +467,7 @@ export class Block {
     logger.debug(`Block ${this.blockid} metadata loaded from database.`)
 
     this.height = height
-    this.stateAfter = new UTXOSet(new Set<string>(stateAfterOutpoints))
+    this.utxosAfter = new UTXOSet(new Set<string>(stateAfterOutpoints))
     this.valid = true
   }
 }

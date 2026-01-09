@@ -28,7 +28,7 @@ import { INVALID_FORMAT, INVALID_HANDSHAKE, UNKNOWN_OBJECT } from "./message";
 import { CustomError } from "./errors";
 
 const VERSION = '0.10.4'
-const NAME = 'Typescript skeleton for task 5' /* TODO */
+const NAME = 'B0b3r'
 
 // Number of peers that each peer is allowed to report to us
 const MAX_PEERS_PER_PEER = 30
@@ -87,10 +87,15 @@ export class Peer {
     })
   }
   async sendGetMempool() {
-    /* TODO */
+    this.sendMessage({
+      type: 'getmempool'
+    })
   }
   async sendMempool(txids: ObjectId[]) {
-    /* TODO */
+    this.sendMessage({
+      type: 'mempool',
+      txids
+    })
   }
   async sendError(msg: string, name: string) {
     this.sendMessage({
@@ -130,6 +135,7 @@ export class Peer {
     await this.sendHello()
     await this.sendGetPeers()
     await this.sendGetChainTip()
+    await this.sendGetMempool()
   }
   async onMessage(message: string) {
     this.debug(`Message arrival: ${message}`)
@@ -143,16 +149,7 @@ export class Peer {
     catch {
       return await this.fatalError(`Failed to parse incoming message as JSON: ${message}`, INVALID_FORMAT)
     }
-    // for now, ignore messages that have a valid type but that we don't yet know how to parse
-    // TODO: remove
-    if('type' in msg)
-    {
-      if(typeof msg.type === 'string')
-      {
-        if(['getmempool', 'mempool'].includes(msg.type))
-          return
-      }
-    }
+
 
     if (!Message.guard(msg)) {
       const validation = Message.validate(msg)
@@ -178,8 +175,8 @@ export class Peer {
         this.onMessageObject.bind(this),
         this.onMessageGetChainTip.bind(this),
         this.onMessageChainTip.bind(this),
-        /*this.onMessageGetMempool.bind(this),
-        this.onMessageMempool.bind(this),*/
+        this.onMessageGetMempool.bind(this),
+        this.onMessageMempool.bind(this),
         this.onMessageError.bind(this)
     )(msg)
   }
@@ -300,10 +297,15 @@ export class Peer {
     this.sendGetObject(msg.blockid)
   }
   async onMessageGetMempool(msg: GetMempoolMessageType) {
-    /* TODO */
+    const txids = mempool.getTxIds()
+    this.sendMempool(txids)
   }
   async onMessageMempool(msg: MempoolMessageType) {
-    /* TODO */
+    for (const txid of msg.txids) {
+      objectManager.retrieve(txid).catch(() => {
+        this.sendError(`Unknown object with id ${txid}`, UNKNOWN_OBJECT)
+      })
+    }
   }
   async onMessageError(msg: ErrorMessageType) {
     this.warn(`Peer reported error: ${msg.name}: ${msg.msg}`)

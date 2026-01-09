@@ -8,7 +8,7 @@ const BIND_IP = '0.0.0.0'
 
 async function main() {
   await chainManager.init()
-  // await mempool.init()
+  await mempool.init()
   network.init(BIND_PORT, BIND_IP)
 }
 
