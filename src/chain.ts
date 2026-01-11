@@ -47,11 +47,12 @@ class ChainManager {
     }
     if (height > this.longestChainHeight) {
       logger.debug(`New longest chain has height ${height} and tip ${block.blockid}`)
+      const oldTip = this.longestChainTip
       this.longestChainHeight = height
       this.longestChainTip = block
 
       // reorg mempool
-      const [lca, shortFork, longFork] = await Chain.getForks(this.longestChainTip, block)
+      const [lca, shortFork, longFork] = await Chain.getForks(oldTip, block)
       await mempool.reorg(lca, shortFork, longFork)
       await this.save()
     }
@@ -75,55 +76,50 @@ export class Chain {
    * @returns [lca, lca..b1, lca..b2]
    */
   static async getForks(b1: Block, b2: Block): Promise<[Block, Chain, Chain]> {
-  // todo: this is ported from the previous codebase and still untested
     let a = b1;
     let b = b2;
 
     while (a.height! > b.height!) {
       if (a.previd == null) break;
-      a = await objectManager.get(a.previd);
+      const obj = await objectManager.get(a.previd);
+      a = await Block.fromNetworkObject(obj);
     }
     while (b.height! > a.height!) {
       if (b.previd == null) break;
-      b = await objectManager.get(b.previd);
+      const obj = await objectManager.get(b.previd);
+      b = await Block.fromNetworkObject(obj);
     }
 
-    while (a.T !== b.T) {
+    while (a.blockid !== b.blockid) {
       if (a.previd == null || b.previd == null) break;
-      a = await objectManager.get(a.previd);
-      b = await objectManager.get(b.previd);
+      const objA = await objectManager.get(a.previd);
+      a = await Block.fromNetworkObject(objA);
+      const objB = await objectManager.get(b.previd);
+      b = await Block.fromNetworkObject(objB);
     }
     const lca = a;
 
     const shortFork: Block[] = [];
     let current = b1;
-    while (current.T !== lca.T) {
-      if (!current.previd) break;
+    while (current.blockid !== lca.blockid) {
       shortFork.push(current);
-      current = await objectManager.get(current.previd);
+      if (!current.previd) break;
+      const obj = await objectManager.get(current.previd);
+      current = await Block.fromNetworkObject(obj);
     }
     shortFork.reverse();
 
     const longFork: Block[] = [];
     current = b2;
-    while (current.T !== lca.T) {
-      if (!current.previd) break;
+    while (current.blockid !== lca.blockid) {
       longFork.push(current);
-      current = await objectManager.get(current.previd);
+      if (!current.previd) break;
+      const obj = await objectManager.get(current.previd);
+      current = await Block.fromNetworkObject(obj);
     }
     longFork.reverse();
 
-    const shortForkChain = new Chain(shortFork);
-    for (const block of shortFork.slice(1)) {
-      shortForkChain.blocks.push(block);
-    }
-
-    const longForkChain = new Chain(longFork);
-    for (const block of longFork.slice(1)) {
-      longForkChain.blocks.push(block);
-    }
-
-    return [lca, shortForkChain, longForkChain];
+    return [lca, new Chain(shortFork), new Chain(longFork)];
   }
 }
 
