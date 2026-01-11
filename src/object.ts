@@ -12,7 +12,6 @@ import { logger } from './logger'
 import { hash } from './crypto/hash'
 import { Peer } from './peer'
 import { Deferred, delay, resolveToReject } from './promise'
-import { mempool } from './mempool'
 
 export const db = new level('./db')
 const OBJECT_AVAILABILITY_TIMEOUT = 5000 // ms
@@ -50,22 +49,16 @@ class ObjectManager {
 
   async validate(object: ObjectType, peer: Peer) {
     await Object.match(
-        async (obj: TransactionObjectType) => {
-          const tx: Transaction = Transaction.fromNetworkObject(obj)
-          logger.debug(`Validating transaction: ${tx.txid}`)
-          await tx.validate()
-          if (!tx.isCoinbase()) {
-            const success: boolean = await mempool.onTransactionArrival(tx)
-            if (!success) {
-              throw new Error('Failed to add transaction to mempool')
-            }
-          }
-        },
-        async (obj: BlockObjectType) => {
-          const block = await Block.fromNetworkObject(obj)
-          logger.debug(`Validating block: ${block.blockid}`)
-          await block.validate(peer)
-        }
+      async (obj: TransactionObjectType) => {
+        const tx: Transaction = Transaction.fromNetworkObject(obj)
+        logger.debug(`Validating transaction: ${tx.txid}`)
+        await tx.validate()
+      },
+      async (obj: BlockObjectType) => {
+        const block = await Block.fromNetworkObject(obj)
+        logger.debug(`Validating block: ${block.blockid}`)
+        await block.validate(peer)
+      }
     )(object)
   }
 

@@ -1,5 +1,5 @@
 import { Block } from './block'
-import { Chain } from './chain'
+import { Chain, chainManager } from './chain'
 import { CustomError } from './errors'
 import { logger } from './logger'
 import { db, ObjectId, objectManager } from './object'
@@ -14,7 +14,35 @@ class MemPool {
   utxos: UTXOSet | undefined = undefined
 
   async init() {
-    await this.load()
+    if (chainManager.longestChainTip === null) {
+      throw new Error("ChainManager not initialized")
+    }
+    const tip = chainManager.longestChainTip
+    if (tip.utxosAfter === undefined) {
+      await tip.load()
+    }
+    if (tip.utxosAfter === undefined) {
+      throw new Error("Tip UTXOs not available")
+    }
+
+    this.utxos = tip.utxosAfter.copy()
+
+    try {
+      const txids = await db.get('mempool:txids')
+      await this.fromTxIds(txids)
+      const oldTxs = this.txs
+      this.txs = []
+
+      // Reset UTXOs again to be sure (onTransactionArrival modifies it)
+      this.utxos = tip.utxosAfter.copy()
+
+      for (const tx of oldTxs) {
+        await this.onTransactionArrival(tx)
+      }
+    } catch {
+      this.txs = []
+      await this.save()
+    }
     logger.debug('Mempool initialized')
   }
 
@@ -54,7 +82,7 @@ class MemPool {
     try {
       await this.fromTxIds(await db.get('mempool:txids'))
       this.utxos = new UTXOSet(new Set<string>(await db.get('mempool:utxos')))
-    } 
+    }
     catch {
       this.txs = []
       this.utxos = new UTXOSet(new Set())
@@ -106,6 +134,8 @@ class MemPool {
     if (tip.utxosAfter === undefined) {
       throw new Error("Mempool reorg failed: utxosAfter of new tip is undefined")
     }
+    this.utxos = tip.utxosAfter.copy()
+
     let successes = 0
     for (const tx of orphanedTxs) {
       const success = await this.onTransactionArrival(tx)
@@ -113,7 +143,6 @@ class MemPool {
         ++successes
       }
     }
-    this.utxos = tip.utxosAfter
     await this.save()
   }
 }

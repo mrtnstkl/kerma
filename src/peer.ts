@@ -23,6 +23,7 @@ import { network } from './network'
 import { ObjectId } from './object'
 import { chainManager } from './chain'
 import { mempool } from './mempool'
+import { Transaction } from './transaction'
 
 import { INVALID_FORMAT, INVALID_HANDSHAKE, UNKNOWN_OBJECT } from "./message";
 import { CustomError } from "./errors";
@@ -281,6 +282,10 @@ export class Peer {
         type: 'ihaveobject',
         objectid
       })
+    }
+    if (msg.object.type === 'transaction') {
+      const tx = Transaction.fromNetworkObject(msg.object)
+      await mempool.onTransactionArrival(tx)
     }
   }
   async onMessageGetChainTip(msg: GetChainTipMessageType) {
